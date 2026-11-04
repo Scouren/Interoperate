@@ -57,7 +57,13 @@ impl MockDb {
         if let Some(l) = self.lib(name) {
             return l;
         }
-        let l = self.new_obj("ddLib", vec![("name", V::str(name))]);
+        let l = self.new_obj(
+            "ddLib",
+            vec![
+                ("name", V::str(name)),
+                ("readPath", V::str(&format!("/mock/{name}"))),
+            ],
+        );
         self.libs.push(l);
         l
     }
@@ -262,7 +268,7 @@ impl MockDb {
 
     // ------------------------------------------------------------------ cellviews
 
-    fn editable(&self, cv: u32) -> bool {
+    pub(super) fn editable(&self, cv: u32) -> bool {
         matches!(s(&self.a(cv, "mode")), Some("w" | "a"))
     }
 
@@ -385,7 +391,7 @@ impl MockDb {
 
     // ------------------------------------------------------------------ figures
 
-    fn lpp(v: &V) -> (String, String) {
+    pub(super) fn lpp(v: &V) -> (String, String) {
         match v {
             V::Str(l) => (l.to_string(), "drawing".into()),
             _ => {
@@ -398,7 +404,7 @@ impl MockDb {
         }
     }
 
-    fn new_shape(
+    pub(super) fn new_shape(
         &mut self,
         cv: u32,
         ty: &str,
@@ -1580,6 +1586,7 @@ impl MockDb {
             )
             | ("arc", "startAngle" | "stopAngle" | "ellipseBBox")
             | ("inst", "orient" | "xy" | "name")
+            | ("textDisplay", "orient" | "xy")
             | ("cellView", "DBUPerUU" | "userUnits")
             | ("cdf", _) => {
                 if matches!(attr, "startAngle" | "stopAngle") && num(&v).is_none() {
