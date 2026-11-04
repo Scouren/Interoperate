@@ -463,6 +463,8 @@ impl MockDb {
                 ("font", V::str(font)),
                 ("height", V::Float(h)),
                 ("labelType", V::str(ltype)),
+                // Drafted by default (live Virtuoso: every label dumps isDrafted t).
+                ("isDrafted", V::T),
                 ("isVisible", V::T),
             ],
         ))
