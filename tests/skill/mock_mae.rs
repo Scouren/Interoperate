@@ -2,8 +2,7 @@
 //!
 //! Signatures (rows of `mockdb::SIGNATURES`, checked before a call reaches here) are each
 //! function's arity and keywords, as collected (MIT) by virtuoso-bridge-lite's
-//! function database; the behaviour follows the notes in research
-//! `virtuoso-netlist-ade.md` §5.3. What no live run has settled is marked `GUESS(Gn)`
+//! function database. What no live run has settled is marked `GUESS(Gn)`
 //! (spec §13).
 //!
 //! Model: a setup per maestro view (`saved`, written by `maeSaveSetup`); `maeOpenSetup`
