@@ -1,0 +1,144 @@
+# Hand-written table of ADE analysis forms and Spectre statements, per analysis kind
+# (spec interop.md §9.2). Rows are TAB-separated:
+#   d kind field value   a form field ADE reports with this value when nothing set it (kind
+#                        options: a simulator option); import drops such a field, export
+#                        writes nothing for it
+#   s kind param...      the parameters of Spectre's <kind> statement (options: the options
+#                        statement); a set field that is none of them is left out with a note
+# A field missing here is treated as set: kept on import and reported if Spectre has no
+# parameter of that name. Add a row when a real setup shows one.
+d	tran	anaName	tran
+d	tran	finalTimeOp	t
+d	tran	trannoisemethod	default
+d	tran	noiseseed	1
+d	tran	binnum	16
+d	tran	noiseruns	100
+s	tran	stop start outputstart step maxstep minstep errpreset method cmin readic write writefinal ic skipdc relref lteratio strobeperiod strobedelay save nestlvl oppoint skipstart skipstop skipcount infotimes annotate title noisefmax noisefmin noiseseed
+d	dc	anaName	dc
+d	dc	rangeType	Start-Stop
+d	dc	incrType	Automatic
+d	dc	stepTypeLin	Step Size
+d	dc	stepTypeLog	Points Per Decade
+s	dc	start stop center span step lin log dec values dev mod param freq oppoint save nestlvl title readns write writefinal force print annotate
+d	ac	anaName	ac
+d	ac	sweep	Frequency
+d	ac	rangeType	Start-Stop
+d	ac	incrType	Automatic
+d	ac	stepTypeLin	Step Size
+d	ac	stepTypeLog	Points Per Decade
+d	ac	outType	Voltage
+s	ac	start stop center span step lin log dec values dev mod param freq prevoppoint save nestlvl title annotate
+d	noise	anaName	noise
+d	noise	sweep	Frequency
+d	noise	rangeType	Start-Stop
+d	noise	incrType	Automatic
+d	noise	stepTypeLin	Step Size
+d	noise	stepTypeLog	Points Per Decade
+d	noise	outType	probe
+d	noise	inType	port
+s	noise	start stop center span step lin log dec values dev mod param freq oprobe iprobe oportv iportv refsideband save nestlvl title annotate
+d	xf	anaName	xf
+d	xf	sweep	Frequency
+d	xf	rangeType	Start-Stop
+d	xf	incrType	Automatic
+d	xf	stepTypeLin	Step Size
+d	xf	stepTypeLog	Points Per Decade
+s	xf	start stop center span step lin log dec values dev mod param freq probe stimuli save nestlvl title annotate
+d	stb	anaName	stb
+d	stb	sweep	Frequency
+d	stb	rangeType	Start-Stop
+d	stb	incrType	Automatic
+d	stb	stepTypeLin	Step Size
+d	stb	stepTypeLog	Points Per Decade
+d	stb	probeType	Probe Instance
+d	stb	stbProbeMode	single-ended
+s	stb	start stop center span step lin log dec values dev mod param freq probe localgnd save nestlvl title annotate
+d	pz	anaName	pz
+d	pz	rangeType	Start-Stop
+d	pz	incrType	Automatic
+d	pz	stepTypeLin	Step Size
+d	pz	stepTypeLog	Points Per Decade
+d	pz	outType	voltage
+d	pz	inType	voltage
+s	pz	freq zeroonly readpz fmax fmin oprobe iprobe save title annotate
+d	sp	anaName	sp
+d	sp	sweep	Frequency
+d	sp	rangeType	Start-Stop
+d	sp	incrType	Automatic
+d	sp	stepTypeLin	Step Size
+d	sp	stepTypeLog	Points Per Decade
+s	sp	start stop center span step lin log dec values dev mod param freq ports porttype file datafmt datatype paramtype donoise oprobe iprobe save title annotate
+d	sens	anaName	sens
+d	dcmatch	anaName	dcmatch
+d	dcmatch	rangeType	Start-Stop
+d	dcmatch	incrType	Automatic
+d	dcmatch	stepTypeLin	Step Size
+d	dcmatch	stepTypeLog	Points Per Decade
+s	dcmatch	start stop center span step lin log dec values dev mod param freq oprobe probe mth where variations save title annotate
+d	acmatch	anaName	acmatch
+d	acmatch	sweep	Frequency
+d	acmatch	rangeType	Start-Stop
+d	acmatch	incrType	Automatic
+d	acmatch	stepTypeLin	Step Size
+d	acmatch	stepTypeLog	Points Per Decade
+s	acmatch	start stop center span step lin log dec values dev mod param freq oprobe probe mth where variations save title annotate
+d	pss	anaName	pss
+d	pss	sweep	Variable
+d	pss	rangeType	Start-Stop
+d	pss	incrType	Linear
+d	pss	stepTypeLin	Step Size
+d	pss	stepTypeLog	Points Per Decade
+s	pss	fund period harms errpreset tstab tstart maxacfreq maxperiods method autotstab saveinit writepss readpss oscic ppv highorder psaratio save nestlvl title annotate
+d	pac	anaName	pac
+d	pac	sweep	Frequency
+d	pac	rangeType	Start-Stop
+d	pac	incrType	Automatic
+d	pac	stepTypeLin	Step Size
+d	pac	stepTypeLog	Points Per Decade
+s	pac	start stop center span step lin log dec values dev mod param freq maxsideband sidebands freqaxis relharmnum save title annotate
+d	pnoise	anaName	pnoise
+d	pnoise	sweep	Frequency
+d	pnoise	rangeType	Start-Stop
+d	pnoise	incrType	Automatic
+d	pnoise	stepTypeLin	Step Size
+d	pnoise	stepTypeLog	Points Per Decade
+d	pnoise	outType	probe
+d	pnoise	inType	port
+s	pnoise	start stop center span step lin log dec values dev mod param freq maxsideband sidebands oprobe iprobe refsideband noisetype noiseout freqaxis save title annotate
+d	pxf	anaName	pxf
+d	pxf	sweep	Frequency
+d	pxf	rangeType	Start-Stop
+d	pxf	incrType	Automatic
+d	pxf	stepTypeLin	Step Size
+d	pxf	stepTypeLog	Points Per Decade
+s	pxf	start stop center span step lin log dec values dev mod param freq maxsideband sidebands probe stimuli freqaxis save title annotate
+d	pstb	anaName	pstb
+d	pstb	sweep	Frequency
+d	pstb	rangeType	Start-Stop
+d	pstb	incrType	Automatic
+d	pstb	stepTypeLin	Step Size
+d	pstb	stepTypeLog	Points Per Decade
+d	pstb	probeType	Probe Instance
+s	pstb	start stop center span step lin log dec values dev mod param freq probe localgnd maxsideband save title annotate
+d	hb	anaName	hb
+s	hb	fundamentals funds maxharms errpreset tstab oversample save title annotate
+d	hbac	anaName	hbac
+d	hbac	sweep	Frequency
+d	hbac	rangeType	Start-Stop
+d	hbac	incrType	Automatic
+d	hbac	stepTypeLin	Step Size
+d	hbac	stepTypeLog	Points Per Decade
+s	hbac	start stop center span step lin log dec values dev mod param freq maxsideband sidebands freqaxis save title annotate
+d	hbnoise	anaName	hbnoise
+d	hbnoise	sweep	Frequency
+d	hbnoise	rangeType	Start-Stop
+d	hbnoise	incrType	Automatic
+d	hbnoise	stepTypeLin	Step Size
+d	hbnoise	stepTypeLog	Points Per Decade
+s	hbnoise	start stop center span step lin log dec values dev mod param freq maxsideband sidebands oprobe iprobe refsideband noisetype freqaxis save title annotate
+d	options	reltol	1e-3
+d	options	vabstol	1e-6
+d	options	iabstol	1e-12
+d	options	gmin	1e-12
+d	options	tnom	27
+s	options	reltol vabstol iabstol temp tnom gmin scale scalem pivotdc digits rforce maxnotes maxwarns save currents nestlvl pwr homotopy limit diagnose checklimitdest
