@@ -1,0 +1,37 @@
+# analysis dcOp
+# /V0/PLUS 1 points I
+0 -0.0005
+# /in 1 points V
+0 1
+# /out 1 points V
+0 0.5
+# analysis dcOpInfo
+# skipped dcOpInfo /R0
+# skipped dcOpInfo /V0
+# analysis noise
+# skipped noise /R0
+# /out 3 points V
+1000 1.2e-08
+10000 1.1e-08
+100000 9e-09
+# analysis pac
+# skipped pac /out
+# analysis pss_fd
+# /out 3 points V
+0 0.5 0
+1000000 0.25 -0.1
+2000000 0.001 0.002
+# analysis pss_td
+# /out 4 points V
+0 0.5
+2.5e-07 0.75
+5e-07 0.5
+7.5e-07 0.25
+# analysis stb
+# loopGain 3 points V
+1000 10 -1
+10000 1 -0.5
+100000 0.1 -0.1
+# analysis stb_margin
+# skipped stb_margin phaseMargin
+# analysis variables
