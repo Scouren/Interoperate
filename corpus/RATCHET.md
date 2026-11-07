@@ -5,7 +5,7 @@
 
 # Netlist ratchet (xschem differential)
 
-The `netlist` row of [docs/dev/testing.md](https://github.com/OpenFAT/Schemify/blob/main/docs/dev/testing.md): every bench of
+The `netlist` row of Schemify's `docs/dev/testing.md`: every bench of
 [benches.txt](benches.txt) imported with the `interop` plugin, elaborated, emitted
 (ngspice and cdl) and compared with xschem's golden under `schemify_spicecmp`.
 Produced by `tests/xschem_differential.rs`:
