@@ -1,9 +1,9 @@
 # interop: Schemify ⇄ Cadence Virtuoso and xschem
 
 Use Schemify as your schematic editor while your team stays in Cadence Virtuoso, and move
-designs to and from xschem. A [Schemify](https://github.com/OpenFAT/Schemify) plugin, never
-part of the core (D24 as amended, D41). Normative spec: [interop.md](https://github.com/OpenFAT/Schemify/blob/main/docs/spec/interop.md); xschem
-import: [import.md](https://github.com/OpenFAT/Schemify/blob/main/docs/spec/import.md).
+designs to and from xschem. A [Schemify](https://github.com/OpenFAT/Schemify-Plugins) plugin, never
+part of the core (D24 as amended, D41). Normative spec: Schemify's `interop.md`; xschem
+import: its `import.md`.
 
 Two interfaces: the **plugin** (`interop.wasm`, loaded by the editor) and, secondary, the
 **native CLI** `schemify-interop` for the same conversions without the editor.
@@ -467,7 +467,7 @@ No Cadence tool runs here, so:
 
 `nix develop` has the pinned Rust 1.95.0 (rust-overlay, with rust-lld), xschem, ngspice and wasmtime. Interop builds on
 Schemify's public SDK only: `schemify-format`, `schemify-abi` and (tests) `schemify-plugin`
-from [OpenFAT/Schemify](https://github.com/OpenFAT/Schemify), pinned to one commit in
+from [OpenFAT/Schemify-Plugins](https://github.com/OpenFAT/Schemify-Plugins), pinned to one commit in
 `Cargo.toml`. Nothing else of Schemify's is linked, and the plugin never runs Schemify's
 netlister or simulator. Tests read copies of the core fixtures in `tests/fixtures/schemify/`.
 
@@ -480,7 +480,7 @@ netlister or simulator. Tests read copies of the core fixtures in `tests/fixture
   parameters as bench `test` and `param` records. Schemify's public format does not have
   them yet, so the default build imports the first test and reports the rest; the tests that
   need them are ignored without the feature. To build it, patch `schemify-format` to a
-  checkout that has them (`--config 'patch."https://github.com/OpenFAT/Schemify".schemify-format.path="…"'`).
+  checkout that has them (`--config 'patch."https://github.com/OpenFAT/Schemify-Plugins".schemify-format.path="…"'`).
 - **`maestro-results`** refuses for now: the run directory is named by the design hash of
   Schemify's run, which its public interface does not offer.
 

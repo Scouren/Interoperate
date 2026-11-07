@@ -49,14 +49,14 @@ proptest = { version = "1", default-features = false, features = ["std"] }
 resolver = "3"
 exclude = ["fuzz"]
 
-# Schemify's public SDK (https://github.com/OpenFAT/Schemify), pinned to one revision.
+# Schemify's public SDK (https://github.com/OpenFAT/Schemify-Plugins), pinned to one revision.
 # `nightly.yml` builds against `main` too, so SDK drift shows up within a day; bump the rev
 # here in every entry together. Netlisting, checking and running are the installed `schemify`
 # command line's (tests and `maestro-results` call it), never a build dependency.
 [workspace.dependencies]
-schemify-abi = { git = "https://github.com/OpenFAT/Schemify", rev = "39da966d2ae77d7dbb0325d32c0b80d136f0262e", features = ["guest"] }
-schemify-format = { git = "https://github.com/OpenFAT/Schemify", rev = "39da966d2ae77d7dbb0325d32c0b80d136f0262e" }
-schemify-plugin = { git = "https://github.com/OpenFAT/Schemify", rev = "39da966d2ae77d7dbb0325d32c0b80d136f0262e" }
+schemify-abi = { git = "https://github.com/OpenFAT/Schemify-Plugins", rev = "39da966d2ae77d7dbb0325d32c0b80d136f0262e", features = ["guest"] }
+schemify-format = { git = "https://github.com/OpenFAT/Schemify-Plugins", rev = "39da966d2ae77d7dbb0325d32c0b80d136f0262e" }
+schemify-plugin = { git = "https://github.com/OpenFAT/Schemify-Plugins", rev = "39da966d2ae77d7dbb0325d32c0b80d136f0262e" }
 
 # Small module: size over speed, no unwinding (a panic is a trap the host reports).
 [profile.release]
