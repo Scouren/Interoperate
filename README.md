@@ -1,7 +1,7 @@
 # interop: Schemify ⇄ Cadence Virtuoso and xschem
 
 Use Schemify as your schematic editor while your team stays in Cadence Virtuoso, and move
-designs to and from xschem. A [Schemify](https://github.com/OpenFAT/Schemify-Plugins) plugin, never
+designs to and from xschem. A [Schemify](https://github.com/Scouren/Schemify-Plugins) plugin, never
 part of the core (D24 as amended, D41). Normative spec: Schemify's `interop.md`; xschem
 import: its `import.md`.
 
@@ -26,7 +26,7 @@ For yourself, in every project: add it to your Schemify config (`init.lua`) and 
 
 ```lua
 schemify.pack.add {
-  { src = "https://github.com/OpenFAT/Interoperate", name = "interop",
+  { src = "https://github.com/Scouren/Interoperate", name = "interop",
     grant = { "read_project", "write_project",
               "read:ANALOG_ROOT", "read:XSCHEM_LIBRARY", "read:PDK_ROOT" },
     fuel = 100000000000 },
@@ -63,7 +63,7 @@ In the editor the File menu gains **Export to Virtuoso (.sfyx)…**, **Import fr
 the editor, the same conversions run from the command line:
 
 ```
-cargo install --git https://github.com/OpenFAT/Interoperate --features cli   # or a release binary, or `nix run github:OpenFAT/Interoperate --`
+cargo install --git https://github.com/Scouren/Interoperate --features cli   # or a release binary, or `nix run github:Scouren/Interoperate --`
 
 schemify-interop virtuoso-export <project> <cell-file|dir>... -o <file.sfyx> [--lib L=V]... [--core-cells]
 schemify-interop virtuoso-import <project> <file.sfyx> [--lib L=V]... [--analoglib]
@@ -467,7 +467,7 @@ No Cadence tool runs here, so:
 
 `nix develop` has the pinned Rust 1.95.0 (rust-overlay, with rust-lld), xschem, ngspice and wasmtime. Interop builds on
 Schemify's public SDK only: `schemify-format`, `schemify-abi` and (tests) `schemify-plugin`
-from [OpenFAT/Schemify-Plugins](https://github.com/OpenFAT/Schemify-Plugins), pinned to one commit in
+from [Scouren/Schemify-Plugins](https://github.com/Scouren/Schemify-Plugins), pinned to one commit in
 `Cargo.toml`. Nothing else of Schemify's is linked, and the plugin never runs Schemify's
 netlister or simulator. Tests read copies of the core fixtures in `tests/fixtures/schemify/`.
 
@@ -480,7 +480,7 @@ netlister or simulator. Tests read copies of the core fixtures in `tests/fixture
   parameters as bench `test` and `param` records. Schemify's public format does not have
   them yet, so the default build imports the first test and reports the rest; the tests that
   need them are ignored without the feature. To build it, patch `schemify-format` to a
-  checkout that has them (`--config 'patch."https://github.com/OpenFAT/Schemify-Plugins".schemify-format.path="…"'`).
+  checkout that has them (`--config 'patch."https://github.com/Scouren/Schemify-Plugins".schemify-format.path="…"'`).
 - **`maestro-results`** refuses for now: the run directory is named by the design hash of
   Schemify's run, which its public interface does not offer.
 
