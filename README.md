@@ -81,6 +81,7 @@ schemify-interop layout-import   <project> <lib>/<cell>[/<view>] -o <bundle-dir>
 schemify-interop pdk-scan        [--stdin] --root <dir> --entry <file> --dialect spice|hspice|spectre [--section S] [--lib L] | --remote-script | --protocol   (PDK scan below)
 schemify-interop pdk-map         --scan <dir> (--dump <cdfnames.sfyx> | --host <ssh name> --vlib <lib>...) [--lib <name>] -o interop.map | --remote-script --vlib <lib>...   (PDK map below)
 schemify-interop pdk-models      [--host <ssh name>] --root <dir> --entry <relpath>... --from <d> --to <d> -o <outdir>   (d: ngspice|espice|xyce|ltspice|hspice|spectre|vacask; PDK models below)
+schemify-interop pdk-remote-models <project> --host <[user@]host> [--family <f>] [--to <simulator>] [-o <host dir>]   (a remote kit's models for the project's simulator, below)
 schemify-interop ciel            <args>...      (ciel from PATH, else a private venv pinned to ciel 3.2.0 under Schemify's data directory, <data>/tools/ciel-3.2.0; needs python3; install output on stderr, ciel's exit status)
 ```
 
@@ -428,6 +429,23 @@ end
 Here the `models` lines are paths on the host, for a project whose runs go there (`host` in
 its tech map). When the simulator reads the kit's own dialect nothing is copied and no ssh
 runs: the `models` lines name the kit's files.
+
+For a project whose kit `pdks.remote` names (a remote kit of Schemify's PDK store), one
+command does this and writes the answer where Schemify reads it:
+
+```
+schemify-interop pdk-remote-models <project> --host <[user@]host> [--family <f>] [--to <simulator>] [-o <host dir>]
+```
+
+The kit's path, entry and dialect come from the record (`--family` picks one when there are
+several). The simulator is `--to`, else the `simulator` row of the project's tech map. The
+converted tree goes to `.cache/schemify/pdk-models/<family>/<simulator>` under the login
+directory on the host (`-o` names another directory there), and the project's `set
+PDK_MODELS` row becomes the converted entry's path; every other line of `schemify.project`
+stays. A simulator that reads the kit's dialect gets the kit's own file. Run it again after
+changing the simulator. `--host` must be the record's host, so a project file alone never
+decides where ssh goes. Exit status: 0 written, 1 written and the conversion has notes, 2
+nothing written and the manifest unchanged.
 
 ## What does not cross
 

@@ -307,3 +307,175 @@ fn a_remote_kit_in_the_simulators_dialect_is_used_where_it_is() {
     assert!(!out.exists());
     let _ = std::fs::remove_dir_all(kit);
 }
+
+/// A project whose `pdks.remote` keeps the made-up kit on `pdk@kithost`, with a manifest
+/// (`extra` rows after its tech map row) and a tech map (`pin` rows in its header), and
+/// `pdk-remote-models <project> <args>` on it through the fake `ssh`: the kit, the project,
+/// stdout, stderr and the exit status.
+#[cfg(unix)]
+fn remote_models(
+    name: &str,
+    pin: &str,
+    extra: &str,
+    args: &[&str],
+) -> (PathBuf, PathBuf, String, String, Option<i32>) {
+    use std::os::unix::fs::PermissionsExt;
+    let (kit, proj, bin) = (
+        scratch(&format!("{name}-kit")),
+        scratch(&format!("{name}-proj")),
+        scratch(&format!("{name}-bin")),
+    );
+    for d in [&kit, &proj, &bin] {
+        std::fs::create_dir_all(d).unwrap();
+    }
+    // The record's path is the host's: here, the real one.
+    let kit = std::fs::canonicalize(&kit).unwrap();
+    for (rel, text) in KIT {
+        std::fs::write(kit.join(rel), text).unwrap();
+    }
+    std::fs::write(
+        proj.join("pdks.remote"),
+        format!(
+            "# team kits\nremote vkit pdk@kithost:{} models top.scs dialect spectre\n",
+            kit.display()
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        proj.join("schemify.project"),
+        format!("schemify 1 project\n\n# mine\nlib mine path lib\nlib tech map tech.map\n{extra}"),
+    )
+    .unwrap();
+    std::fs::write(
+        proj.join("tech.map"),
+        format!("schemify 1 techmap\n  pdk vkit\n{pin}  host pdk@kithost\n\nclass nmos core\n  cell vkit:nfet_lvt\n  simulator hspice\n"),
+    )
+    .unwrap();
+    std::fs::write(bin.join("ssh"), "#!/bin/sh\nshift\nexec \"$@\"\n").unwrap();
+    std::fs::set_permissions(bin.join("ssh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let cli = env!("CARGO_BIN_EXE_schemify-interop");
+    let o = std::process::Command::new(cli)
+        .arg("pdk-remote-models")
+        .arg(&proj)
+        .args(args)
+        .env(
+            "PATH",
+            format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+        )
+        .env("SFY_INTEROP", cli)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&bin);
+    (
+        kit,
+        proj,
+        String::from_utf8(o.stdout).unwrap(),
+        String::from_utf8(o.stderr).unwrap(),
+        o.status.code(),
+    )
+}
+
+#[test]
+#[cfg(unix)]
+fn a_projects_models_follow_its_tech_maps_simulator() {
+    // The tech map pins xyce and the kit is Spectre: converted on the host, and the
+    // manifest's own PDK_MODELS row names the converted entry; every other line stays.
+    let out = std::fs::canonicalize(std::env::temp_dir())
+        .unwrap()
+        .join(format!("pdk_models-{}-follow-out", std::process::id()));
+    let _ = std::fs::remove_dir_all(&out);
+    let (kit, proj, text, err, code) = remote_models(
+        "follow",
+        "  simulator xyce\n",
+        "set PDK_MODELS /old/top.scs\nset MINE 1\n",
+        &["--host", "pdk@kithost", "-o", out.to_str().unwrap()],
+    );
+    let models = format!("{}/top.scs", out.display());
+    assert_eq!(
+        (text.as_str(), code),
+        (
+            format!("vkit: PDK_MODELS is {models} (for xyce, on pdk@kithost)\n").as_str(),
+            Some(0)
+        ),
+        "{err}"
+    );
+    assert_eq!(
+        read(&proj, "schemify.project"),
+        format!(
+            "schemify 1 project\n\n# mine\nlib mine path lib\nlib tech map tech.map\nset PDK_MODELS {models}\nset MINE 1\n"
+        )
+    );
+    assert!(read(&out, "devices.scs").contains(".subckt nfet_lvt"));
+    for d in [kit, proj, out] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn a_simulator_that_reads_the_kit_gets_the_kits_own_file() {
+    // --to wins over the pin; Spectre reads a Spectre kit as it is: no row yet, so one is added.
+    let (kit, proj, text, err, code) = remote_models(
+        "own",
+        "  simulator xyce\n",
+        "",
+        &["--host", "pdk@kithost", "--to", "spectre"],
+    );
+    let models = format!("{}/top.scs", kit.display());
+    assert_eq!(code, Some(0), "{err}");
+    assert!(
+        text.contains(&format!("PDK_MODELS is {models} (for spectre")),
+        "{text}"
+    );
+    assert!(
+        read(&proj, "schemify.project").ends_with(&format!("tech.map\nset PDK_MODELS {models}\n"))
+    );
+    for d in [kit, proj] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn a_project_never_picks_the_host_and_needs_a_simulator() {
+    let before = "schemify 1 project\n\n# mine\nlib mine path lib\nlib tech map tech.map\nset PDK_MODELS /old/top.scs\n";
+    for (pin, args, why) in [
+        // The record names another host than the one asked for.
+        (
+            "  simulator xyce\n",
+            &["--host", "elsewhere"][..],
+            "keeps vkit on pdk@kithost, not on elsewhere",
+        ),
+        // No pin and no --to.
+        ("", &["--host", "pdk@kithost"][..], "pins no simulator"),
+        // A pin that is no dialect never reaches the host.
+        (
+            "  simulator $(id)\n",
+            &["--host", "pdk@kithost"][..],
+            "unknown dialect $(id)",
+        ),
+        (
+            "",
+            &["--host", "pdk@kithost", "--to", "eldo"][..],
+            "unknown dialect eldo",
+        ),
+        (
+            "  simulator xyce\n",
+            &["--host", "pdk@kithost", "--family", "other"][..],
+            "no family other",
+        ),
+        ("  simulator xyce\n", &[][..], "usage:"),
+    ] {
+        let (kit, proj, text, err, code) =
+            remote_models("refuse", pin, "set PDK_MODELS /old/top.scs\n", args);
+        assert_eq!(code, Some(2), "{args:?}: {text}{err}");
+        assert!(
+            format!("{text}{err}").contains(why),
+            "{args:?}: {text}{err}"
+        );
+        assert_eq!(read(&proj, "schemify.project"), before, "{args:?}");
+        for d in [kit, proj] {
+            let _ = std::fs::remove_dir_all(d);
+        }
+    }
+}
