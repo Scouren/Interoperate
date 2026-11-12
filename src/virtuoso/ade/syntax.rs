@@ -50,6 +50,26 @@ pub(super) fn path_to_ade(p: &str) -> String {
     out
 }
 
+/// The Spectre file (ADE spelling) and section of bench model file `f` (ADE spelling) and
+/// section `sec` through the `model` row naming `f` (§8.2); `None` without one.
+pub(super) fn model_to_spectre(m: &Mapping, f: &str, sec: &str) -> Option<(String, String)> {
+    let r = m.models.iter().find(|r| path_to_ade(&r.path) == f)?;
+    let sec = r.sections.iter().find(|x| x.0 == sec).map_or(sec, |x| &x.1);
+    Some((path_to_ade(&r.spectre), sec.to_owned()))
+}
+
+/// Maestro model file `f` and section `sec` as the bench names them (bench spelling): the
+/// inverse of [`model_to_spectre`], else [`path_from_ade`] and the same section.
+pub(super) fn model_from_spectre(m: &Mapping, f: &str, sec: &str) -> (String, String) {
+    match m.models.iter().find(|r| path_to_ade(&r.spectre) == f) {
+        Some(r) => {
+            let sec = r.sections.iter().find(|x| x.1 == sec).map_or(sec, |x| &x.0);
+            (r.path.clone(), sec.to_owned())
+        }
+        None => (path_from_ade(f), sec.to_owned()),
+    }
+}
+
 /// `$NAME` → `${NAME}` (the inverse of [`path_to_ade`]).
 pub(super) fn path_from_ade(p: &str) -> String {
     let mut out = String::with_capacity(p.len() + 4);

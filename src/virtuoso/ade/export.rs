@@ -3,6 +3,8 @@
 //! analyses, model files, temperature and params; vars and sweeps, the test's own values;
 //! corners; device parameters; outputs and specs.
 
+use std::collections::BTreeSet;
+
 use super::*;
 
 /// Code languages whose text is SPICE (format.md rank 6).
@@ -40,9 +42,10 @@ struct TestExport {
 /// design view. The bench's device parameters (`param`, corner `param`) go with the first
 /// test. A bench whose header keeps the view's setup XML (§9.7) sends a test's enable and
 /// a parameter only when they differ from it. `inst` answers the output translator's
-/// instance questions ([`InstInfo`]). Bench content §9.1 does not map is reported in
-/// `notes` (`needs_review:` `code sweep output spec plot expression design-variable
-/// montecarlo optimize config corner`); the caller stashes it (§7.3).
+/// instance questions ([`InstInfo`]). A model file a `model` row of `map` names becomes
+/// its Spectre file (§8.2). Bench content §9.1 does not map is reported in `notes`
+/// (`needs_review:` `code sweep output spec plot expression design-variable montecarlo
+/// optimize config corner model`); the caller stashes it (§7.3).
 ///
 /// # Panics
 ///
@@ -52,6 +55,7 @@ pub fn export<F: Fn(&str) -> Option<InstInfo>>(
     ci: usize,
     vlib: &str,
     inst: F,
+    map: &Mapping,
     notes: &mut Notes,
 ) -> BenchExport {
     let c = &d.cells[ci];
@@ -127,6 +131,28 @@ pub fn export<F: Fn(&str) -> Option<InstInfo>>(
             continue;
         }
         done.push(te);
+    }
+    // §8.2 `model` rows: Maestro runs Spectre, so a deck's (HSPICE) file becomes the one
+    // Spectre reads; any other file but Spectre's own is sent as written, and reported.
+    let mut unmapped = BTreeSet::new();
+    for (_, f, sec) in done.iter_mut().flat_map(|x| x.t.models.iter_mut()) {
+        match model_to_spectre(map, f, sec) {
+            Some(m) => (*f, *sec) = m,
+            None if !f.to_ascii_lowercase().ends_with(".scs") => {
+                unmapped.insert(f.clone());
+            }
+            None => {}
+        }
+    }
+    for f in unmapped {
+        notes.review(
+            "model",
+            cell,
+            format!(
+                "model file {f}: not a Spectre file (.scs) and no interop.map `model` row \
+                 names one; sent as written"
+            ),
+        );
     }
     // With tests, a block or output none of them lists is no test's (format.md rank 6).
     for r in c.records(RecordKind::Code) {
@@ -282,15 +308,22 @@ fn export_test<F: Fn(&str) -> Option<InstInfo>>(
                 if spice && first.eq_ignore_ascii_case(".title") {
                     // The netlist's title line: Spectre names the netlist after the design.
                     notes.dropped("code", cell, format!("{at}: Maestro has no title"));
-                } else if spice && line.split_whitespace().any(|x| x.starts_with("monte=")) {
+                } else if let Some(SpiceLine::Monte(sweep)) = spice_line(line).filter(|_| spice) {
                     // HSPICE's `sweep monte=N`: Maestro's Monte Carlo is a run mode of the
                     // stored setup (a `montecarlo` record, §9.9) drawing Spectre's
-                    // statistics, not HSPICE's.
+                    // statistics, not HSPICE's. The analysis it sweeps maps on its own.
+                    let mapped =
+                        sweep.is_some_and(|a| source_line(&a, spice, &vars, &mut t, cell, notes));
+                    let rest = if mapped {
+                        ""
+                    } else {
+                        "; its analysis does not map"
+                    };
                     notes.review(
                         "montecarlo",
                         cell,
                         format!(
-                            "{at}: an HSPICE Monte Carlo sweep; a `montecarlo` record carries it"
+                            "{at}: an HSPICE Monte Carlo sweep; a `montecarlo` record carries it{rest}"
                         ),
                     );
                 } else {
@@ -702,9 +735,12 @@ fn analysis_source(c: &Cell, runs: &dyn Fn(&str) -> bool) -> Option<u32> {
     codes.into_iter().find(|&r| {
         let lines: Vec<&str> = c.doc.verbatim(r).collect();
         match c.field(r, 1) {
-            l if SPICE_LANGS.contains(&l) => lines
-                .iter()
-                .any(|x| matches!(spice_line(x), Some(SpiceLine::Analysis(..)))),
+            l if SPICE_LANGS.contains(&l) => lines.iter().any(|x| {
+                matches!(
+                    spice_line(x),
+                    Some(SpiceLine::Analysis(..) | SpiceLine::Monte(_))
+                )
+            }),
             "spectre" => {
                 lines
                     .iter()
@@ -755,7 +791,8 @@ fn source_line(
     };
     let has_global = |t: &Test, n: &str| t.vars.iter().any(|v| v.0 == n && v.2.is_empty());
     match parsed {
-        None => false,
+        // The caller reports it, with what its analysis did.
+        None | Some(SpiceLine::Monte(_)) => false,
         Some(SpiceLine::ErrPreset(p)) => match t.analyses.iter_mut().find(|a| a.0 == "tran") {
             Some(a) if !a.2.iter().any(|o| o.0 == "errpreset") => {
                 a.2.push(kv("errpreset", &p));
@@ -843,6 +880,9 @@ pub(super) enum SpiceLine {
     /// Simulator options `(Spectre name, value)`: `.options reltol=…`, Spectre
     /// `<name> options k=v …`.
     SimOpts(Vec<(String, String)>),
+    /// HSPICE's `<analysis> sweep monte=N …`: the analysis line before `sweep`, `None`
+    /// when the line has no `sweep` before its `monte=`.
+    Monte(Option<String>),
 }
 
 /// AC/noise sweep options of `dec|lin n f1 f2` (values SPICE numbers). ngspice's `lin n` is
@@ -875,6 +915,13 @@ fn freq_opts(ty: &str, n: &str, f1: &str, f2: &str) -> Option<Vec<(String, Strin
 /// that does not parse exactly: extra words such as `uic`, expressions, two-source `.dc`).
 fn spice_line(line: &str) -> Option<SpiceLine> {
     let w: Vec<&str> = line.split_whitespace().collect();
+    if let Some(m) = w
+        .iter()
+        .position(|x| x.to_ascii_lowercase().starts_with("monte="))
+    {
+        let sweep = w[..m].iter().position(|x| x.eq_ignore_ascii_case("sweep"));
+        return Some(SpiceLine::Monte(sweep.map(|k| w[..k].join(" "))));
+    }
     let num = |x: &str| ael::number_to_ael(x);
     let dir = w.first()?.to_ascii_lowercase();
     Some(match (dir.as_str(), &w[1..]) {

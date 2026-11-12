@@ -427,9 +427,18 @@ fn view_params(
 /// already took, a disabled analysis, a value without a Schemify form. The view's own
 /// setup (`maesdb`, `maestate`) goes into the bench header (`restore`, §9.7).
 ///
+/// A model file a `model` row of `map` names as its Spectre file comes back as the row's
+/// file (§8.2), except in a Spectre analysis block.
+///
 /// Records [`check`] refuses are reported (`needs_review:code`) and that test is skipped;
 /// the reader checks them first, so this happens only for records built in memory.
-pub fn import(tests: &[&[Record]], bench: &mut Document<'static>, cell: &str, notes: &mut Notes) {
+pub fn import(
+    tests: &[&[Record]],
+    bench: &mut Document<'static>,
+    cell: &str,
+    map: &Mapping,
+    notes: &mut Notes,
+) {
     let mut ts: Vec<Test> = Vec::new();
     let mut ok: Vec<&[Record]> = Vec::new();
     for recs in tests {
@@ -589,10 +598,11 @@ pub fn import(tests: &[&[Record]], bench: &mut Document<'static>, cell: &str, no
                 );
             }
             let sec = secs.first().copied().unwrap_or("");
+            let (f, sec) = model_from_spectre(map, f, sec);
             if sec.is_empty() {
-                push_attr(bench, "include", &[&path_from_ade(f)]);
+                push_attr(bench, "include", &[&f]);
             } else {
-                push_attr(bench, "lib", &[&path_from_ade(f), sec]);
+                push_attr(bench, "lib", &[&f, &sec]);
             }
         }
         let mut temp = None;
@@ -679,7 +689,7 @@ pub fn import(tests: &[&[Record]], bench: &mut Document<'static>, cell: &str, no
         );
     }
     for t in &ts[..imported] {
-        let (codes, outs) = import_test(t, &globals, bench, cell, &mut taken, notes);
+        let (codes, outs) = import_test(t, &globals, bench, cell, &mut taken, map, notes);
         if !several {
             continue;
         }
@@ -852,6 +862,7 @@ fn import_test(
     bench: &mut Document<'static>,
     cell: &str,
     taken: &mut Taken,
+    map: &Mapping,
     notes: &mut Notes,
 ) -> (Vec<String>, Vec<String>) {
     let from = |v: &str, notes: &mut Notes| from_ael(v, globals, cell, notes);
@@ -917,7 +928,7 @@ fn import_test(
     let as_spice = spice.is_some() && spice_temp.is_some();
     if as_spice {
         for (_, f, sec) in t.models.iter().filter(|m| m.0.is_empty()) {
-            let f = path_from_ade(f);
+            let (f, sec) = model_from_spectre(map, f, sec);
             let f = if f.contains(char::is_whitespace) {
                 format!("\"{f}\"")
             } else {

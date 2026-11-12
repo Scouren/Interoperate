@@ -34,6 +34,7 @@ use schemify_format::{Document, FileKind, RecordKind};
 
 use super::ael::{self, AelName, Name};
 use crate::design::{Cell, Design, push_attr, push_record};
+use crate::map::Mapping;
 use crate::notes::Notes;
 use crate::sfyx::{Error, Record, Value, i, pairs, s, text};
 

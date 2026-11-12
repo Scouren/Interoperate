@@ -239,7 +239,9 @@ the Schemify side; the report lists them.
 
 When the Schemify library and the Virtuoso library name the same devices differently (an
 xschem-imported sky130 against a Virtuoso sky130 kit), write `interop.map` at the project
-root. It maps cell, pins and parameters, including value scaling. Such instances are
+root. It maps cell, pins and parameters, including value scaling, and a bench's model file
+to the Spectre file Maestro reads (`model <file> virtuoso <spectre file>`, with `section
+<from> <to>` lines; any other model file that is not `.scs` is reported). Such instances are
 re-mastered: their connections ride on labels, so no net changes even though the two symbols
 differ in shape (spec §6.4, §8.2).
 

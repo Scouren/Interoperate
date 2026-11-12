@@ -85,7 +85,7 @@ fn fresh(ctx: &Ctx<'_>, notes: &mut Notes) -> Fresh {
             .collect();
         let maestro = !tests.is_empty();
         if maestro {
-            ade::import(&tests, &mut doc, &c.name, notes);
+            ade::import(&tests, &mut doc, &c.name, ctx.map, notes);
         }
         let dir = ctx.targets[k].dir.as_str();
         let cellref = |l: &str, cl: &str| ctx.master(l, cl).cellref(dir);
