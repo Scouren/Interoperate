@@ -67,6 +67,8 @@ cargo install --git https://github.com/Scouren/Interoperate --features cli   # o
 
 schemify-interop virtuoso-export <project> <cell-file|dir>... -o <file.sfyx> [--lib L=V]... [--core-cells]
 schemify-interop virtuoso-import <project> <file.sfyx> [--lib L=V]... [--analoglib]
+schemify-interop virtuoso-pull   <project> --host <ssh name> --vlib <lib> [--cell <cell>]... [--ref <vlib>]... [--no-maestro] [--analoglib] [--lib L=V]...   (one command each way, below)
+schemify-interop virtuoso-push   <project> <cell-file|dir>... --host <ssh name> [--into <vlib>] [--overwrite] [--callbacks] [--core-cells] [--lib L=V]...
 schemify-interop xschem-export   <project> <cell-file|dir>... -o <dir>
 schemify-interop xschem-import   <lib-dir>... -o <out-dir> [--root <dir>]... [--models <file>[:<section>]]... [--xschemrc <file>]...
                                  [--spiceinit <file>] [--tech <file>] [--cdf <dump>] [--no-core]   (spec import.md)
@@ -173,7 +175,8 @@ set. Only Virtuoso runs them, so Schemify never computes these values: it keeps 
 ### Bring a design from Virtuoso
 
 `SfyExport("/tmp/amp.sfyx" "myLib" list("amp" "amp_tb"))` dumps the cells. The default
-`?ref t` adds every master they use from other libraries, such as PDK and analogLib devices.
+`?ref t` adds every master they use from other libraries, such as PDK and analogLib devices;
+`?ref list("analogLib" "basic")` adds only the masters of those libraries.
 `?maestro t`, also the default, adds the testbenches' maestro setups. Then run
 `schemify-interop virtuoso-import <project> amp.sfyx`.
 
@@ -202,6 +205,55 @@ Cellviews you did not change in Schemify since they came from Virtuoso are left 
 Virtuoso drew them, including fonts, label justification and instance-label styles. Only what
 you edited is redrawn. Object identity rides on `schemifyId` properties, so round trips give
 clean Schemify diffs.
+
+### One command each way
+
+When Virtuoso runs on a host you reach with ssh, two commands do the steps above:
+
+```
+schemify-interop virtuoso-pull <project> --host <ssh name> --vlib <lib> [--cell <cell>]... [--ref <vlib>]... [--no-maestro] [--analoglib] [--lib L=V]...
+schemify-interop virtuoso-push <project> <cell-file|dir>... --host <ssh name> [--into <vlib>] [--overwrite] [--callbacks] [--core-cells] [--lib L=V]...
+```
+
+Each opens one ssh connection (`ssh <host> sh -s`) and installs nothing on the host: the
+script it sends carries `schemify.il`, starts Virtuoso in batch, and removes its temporary
+directory when done. Each prints on stderr how long the host part took.
+
+- `virtuoso-pull` runs `SfyExport` on `<lib>` (the `--cell` cells, or every cell;
+  `--no-maestro` leaves the maestro setups out), then imports the dump as `virtuoso-import`
+  does. The dump and its report stay in the project as `.schemify/virtuoso/<lib>.sfyx` and
+  `<lib>.report.md`.
+- `virtuoso-push` exports the cells as `virtuoso-export` does, to
+  `.schemify/virtuoso/push.sfyx` with its report, and runs `SfyImport` on the host: into
+  `--into <vlib>`, else into the libraries the records name; `--overwrite` and `--callbacks`
+  set `?overwrite t` and `?callbacks t`. It prints the load's log. Without `--overwrite`, a
+  cellview or CDF that already exists in Virtuoso is left alone: the log refuses it, the
+  command says how many and exits 1. The OCEAN scripts the export writes are not sent.
+
+Only masters from the `--ref` libraries leave the host, with their symbols and CDF. Without
+`--ref` these are `analogLib` and `basic`; any `--ref` replaces that list. So a PDK's devices
+stay on the host unless you name their library. An instance of a master that was not dumped
+keeps that master. If `interop.map` sends the master to a local cell, the instance goes there
+as usual. If not, the import report has one `needs_review:master` row per such master, and the
+pull's summary counts them per library and prints the `--ref` flags that would bring them. To
+dump the masters of `myPdk` too, if you may copy that PDK's symbols and CDF:
+
+```
+schemify-interop virtuoso-pull proj --host pdkhost --vlib myLib --ref analogLib --ref basic --ref myPdk
+```
+
+The host side reads the same variables as `pdk-map --host` (table under PDK map below):
+`SFY_CADENCE_ENV` (the Cadence setup script), `VIRTUOSO`, `CDS_LIC_FILE`, `CDS_LIC_ONLY`,
+`SFY_CDS_DIR` (the directory whose `cds.lib` defines the libraries) and
+`SFY_VIRTUOSO_TIMEOUT`. Relative paths are relative to the login directory:
+
+```
+SFY_CADENCE_ENV=cad/setup.csh SFY_CDS_DIR=work schemify-interop virtuoso-push proj myLib --host pdkhost --into scratchLib
+```
+
+Exit status: 0 done, 1 something was refused (on the host, or by the import or export), 2 a
+usage error, or ssh or Virtuoso did not run. When Virtuoso does not start, the message names
+the variables to set.
 
 ### Testbenches and ADE (maestro)
 

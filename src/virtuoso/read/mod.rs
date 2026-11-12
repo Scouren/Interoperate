@@ -143,6 +143,33 @@ fn one_ground(doc: &Document<'static>) -> Option<Document<'static>> {
     Some(out)
 }
 
+/// One `needs_review:master` row per master that resolves to no cell (no record in the dump,
+/// no cell file in the project, directly or through `interop.map`), in place of one per
+/// instance: its instances keep it as their master. A dump made with `SfyExport ?ref` naming
+/// libraries leaves the masters of every other library out.
+fn group_missing_masters(notes: &mut Notes) {
+    // master → (instances, the first one)
+    let mut g: BTreeMap<String, (usize, String)> = BTreeMap::new();
+    notes.rows.retain(|r| {
+        if r.class != "needs_review:master" {
+            return true;
+        }
+        g.entry(r.cell.clone())
+            .or_insert_with(|| (0, r.detail.clone()))
+            .0 += 1;
+        false
+    });
+    for (master, (n, first)) in g {
+        notes.review(
+            "master",
+            &master,
+            format!(
+                "not in the dump and no cell in the project: {n} instance(s) keep it as their master (e.g. {first})"
+            ),
+        );
+    }
+}
+
 /// The project as an import leaves it: the existing files, every fresh document and a
 /// manifest naming every library they land in (what `load_closed` resolves against).
 fn fresh_files(ctx: &Ctx<'_>, docs: &[Option<(Document<'static>, Option<String>, bool)>]) -> Files {
@@ -463,6 +490,7 @@ pub fn import(
     let ctx = Ctx::new(&d, existing, map, opts, &mut notes);
     let fr = fresh(&ctx, &mut notes);
     group_kit_callbacks(&mut notes);
+    group_missing_masters(&mut notes);
     let mut files: Vec<(String, Vec<u8>)> = Vec::new();
     let mut new_libs: BTreeMap<String, String> = BTreeMap::new();
     let manifest = existing

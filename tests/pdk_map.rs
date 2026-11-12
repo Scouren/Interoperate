@@ -222,7 +222,7 @@ fn fakes(dir: &Path, dump: &str) -> PathBuf {
         "#!/bin/sh\n[ \"$1\" = -nograph ] && [ \"$2\" = -restore ] || exit 9\n\
          grep -q '(SfyCdfNames .* (list \"vkit\" \"vkit2\"))' \"$3\" || exit 9\n\
          echo \"lic=$CDS_LIC_FILE only=${{CDS_LIC_ONLY:-}} setup=${{FAKE_SETUP:-}} pwd=$(pwd)\" >{seen}\n\
-         cp {dump} \"$SFY_PDKMAP_DIR/cdf.sfyx\"\necho PASS >\"$SFY_PDKMAP_DIR/cdf.sfyx.log\"\n",
+         cp {dump} \"$SFY_RUN_DIR/run.sfyx\"\necho PASS >\"$SFY_RUN_DIR/run.sfyx.log\"\n",
         seen = dir.join("seen").display(),
         dump = dir.join("dump.sfyx").display(),
     );
@@ -251,7 +251,7 @@ fn host_map(dir: &Path, bin: &Path, env: &[(&str, String)]) -> std::process::Out
             "PATH",
             format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
         );
-    for (k, _) in interop::pdk_map::ENV {
+    for (k, _) in interop::cli::ENV {
         c.env_remove(k);
     }
     c.envs(env.iter().map(|(k, v)| (k, v))).output().unwrap()
@@ -320,7 +320,7 @@ fn host_without_virtuoso_names_the_variables_to_set() {
         "SFY_CADENCE_ENV",
         "CDS_LIC_FILE or CDS_LIC_ONLY",
         "SFY_CDS_DIR",
-        "the dump on kithost failed",
+        "the batch Virtuoso session on kithost failed",
     ] {
         assert!(err.contains(want), "{want}: {err}");
     }

@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use common::{
     canonical, design_libs, export_cells, import_opts, is_cell, line_of, load_all, load_tops,
-    located, project, read_tree, root, strip_fp,
+    located, project, read_tree, root, strip_fp, without_schemify_props,
 };
 use interop::design::Files;
 use interop::map::Mapping;
@@ -169,18 +169,6 @@ fn debug_dump_cell() {
     i.load(&format!("(SfyExport \"/e2e/o.sfyx\" \"{lib}\" nil)"))
         .unwrap();
     println!("=== SKILL\n{}", section(&i.files["/e2e/o.sfyx"]));
-}
-
-/// The dump without what the round trip adds by design: the header's producer and the
-/// `schemify*` properties (ids, stash, net spellings) the Rust exporter writes.
-fn without_schemify_props(text: &str) -> String {
-    let recs: Vec<sfyx::Record> = sfyx::read(text)
-        .unwrap()
-        .into_iter()
-        .filter(|r| r.tag != "sfyx" && r.tag != "skipped")
-        .filter(|r| !(r.tag == "prop" && r.str(1).is_ok_and(|n| n.starts_with("schemify"))))
-        .collect();
-    sfyx::write(&recs)
 }
 
 #[test]

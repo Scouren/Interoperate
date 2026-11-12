@@ -471,11 +471,12 @@ enum Port {
 }
 
 /// The interpreter. Files live in [`Interp::files`] (absolute paths as keys); `printf`
-/// output collects in [`Interp::log`].
+/// output collects in [`Interp::log`]; `getShellEnvVar` reads [`Interp::env`].
 pub struct Interp<H> {
     pub host: H,
     pub files: BTreeMap<String, String>,
     pub log: String,
+    pub env: BTreeMap<String, String>,
     globals: HashMap<Rc<str>, V>,
     stack: Vec<(Rc<str>, V)>,
     funcs: HashMap<Rc<str>, Rc<Proc>>,
@@ -603,6 +604,8 @@ const BUILTINS: &[&str] = &[
     "warn",
     "sstatus",
     "getShellEnvVar",
+    "load",
+    "exit",
     "simplifyFilename",
     "isFile",
     "upperCase",
@@ -646,6 +649,7 @@ impl<H: Host> Interp<H> {
             host,
             files: BTreeMap::new(),
             log: String::new(),
+            env: BTreeMap::new(),
             globals: HashMap::new(),
             stack: Vec::new(),
             funcs: HashMap::new(),
@@ -1917,8 +1921,18 @@ impl<H: Host> Interp<H> {
                 }
                 "getShellEnvVar" => {
                     need(1)?;
-                    V::Nil
+                    self.env.get(&text(&a[0])?).map_or(V::Nil, |v| V::str(v))
                 }
+                "load" => {
+                    need(1)?;
+                    let f = text(&a[0])?;
+                    let src = self.files.get(&f).cloned();
+                    let src = src.ok_or_else(|| Flow::Err(format!("load: no file {f}")))?;
+                    self.load(&src).map_err(Flow::Err)?;
+                    V::T
+                }
+                // A batch session ends when its file does; nothing to stop here.
+                "exit" => V::Nil,
                 "sstatus" => {
                     need(2)?;
                     V::T

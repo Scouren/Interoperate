@@ -15,8 +15,10 @@
 ;; ================================================================ export
 
 ;; Dumps cells (names; nil = every cell) of library lib to path, with the closure of their
-;; schematic masters inside lib as "design" cells and, with ref, every master outside lib
-;; as a "ref" cell (the views instances use, plus CDF). Writes <path>.log; t on PASS.
+;; schematic masters inside lib as "design" cells and, with ref t, every master outside lib
+;; as a "ref" cell (the views instances use, plus CDF); with ref a list of library names,
+;; only the masters in those libraries (the others never leave the host). Writes
+;; <path>.log; t on PASS.
 (procedure (SfyExport path lib cells @key (ref t) (maestro t))
   (let ((sfyLogPort (SfyLogOpen path)) (sfyCountTab (makeTable "sfyCounts" nil))
         (sfyCountKeys nil) (sfyFails 0) (design nil) (refs nil))
@@ -29,6 +31,7 @@
                 (progn
                   (setq design (SfyDesignClosure lib (or cells (SfyCellNames lib))))
                   (when ref (setq refs (SfyRefMasters lib design)))
+                  (when (listp ref) (setq refs (setof e refs (member (car e) ref))))
                   (SfyDumpFile path refs (SfyDesignViews lib design)
                     (and maestro lib) design))
                 t)

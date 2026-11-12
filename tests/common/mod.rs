@@ -158,6 +158,18 @@ pub fn strip_stash(text: &str) -> String {
     sfyx::write(&kept)
 }
 
+/// The dump without what the round trip adds by design: the header's producer and the
+/// `schemify*` properties (ids, stash, net spellings) the Rust exporter writes.
+pub fn without_schemify_props(text: &str) -> String {
+    let recs: Vec<sfyx::Record> = sfyx::read(text)
+        .unwrap()
+        .into_iter()
+        .filter(|r| r.tag != "sfyx" && r.tag != "skipped")
+        .filter(|r| !(r.tag == "prop" && r.str(1).is_ok_and(|n| n.starts_with("schemify"))))
+        .collect();
+    sfyx::write(&recs)
+}
+
 /// Where a dump record sits (spec §4.2 nesting): the library, cell and cellview it follows,
 /// whether that cell is a `"design"` one, and whether the maestro records have begun. Empty
 /// before the first of each.
