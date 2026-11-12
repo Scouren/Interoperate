@@ -455,3 +455,62 @@ fn run_modes_without_a_stored_setup_are_reported() {
     assert!(t.contains("montecarlo mc: no stored Maestro setup"), "{t}");
     assert!(t.contains("optimize o: no stored Maestro setup"), "{t}");
 }
+
+/// A Maestro view with an optimizer and a `>` spec, and its setup files (live `l1_mae_xml`):
+/// the default build's format has no `gt` goal, so the spec is reported and the bench
+/// parses; the import aborted on it ("the import writes a bench that parses").
+#[test]
+fn a_bound_spec_is_a_goal_only_in_the_cadence_records_format() {
+    let xml = "<?xml version=\"1.0\"?>\n<setupdb version=\"6\">maesdb\n\t<active>Active Setup\n\t\t<specs>\n\t\t\t<spec>T1.vmax\n\t\t\t\t<testname>T1</testname>\n\t\t\t\t<resname>vmax</resname>\n\t\t\t\t<specType>gt</specType>\n\t\t\t\t<min>0.5</min>\n\t\t\t</spec>\n\t\t</specs>\n\t\t<runoptions>\n\t\t\t<mode>Global Optimization\n\t\t\t\t<runoption>numpoints\n\t\t\t\t\t<value>50</value>\n\t\t\t\t</runoption>\n\t\t\t</mode>\n\t\t</runoptions>\n\t</active>\n</setupdb>\n";
+    let r = |tag: &str, f: &[&str]| Record::new(tag, f.iter().map(|x| sfyx::s(x)).collect());
+    let dump = sfyx::write(&[
+        Record::new("sfyx", vec![sfyx::i(1), sfyx::s("t")]),
+        r("lib", &[LIB]),
+        r("cell", &["rc", "design"]),
+        Record::new(
+            "cv",
+            vec![sfyx::s("schematic"), sfyx::s("schematic"), sfyx::i(160000)],
+        ),
+        r("maestro", &["T1", LIB, "rc", "schematic", "spectre"]),
+        Record::new(
+            "maesdb",
+            vec![sfyx::text(xml), sfyx::Value::List(Vec::new())],
+        ),
+        r("maefile", &["maestro.sdb", "YWI="]),
+        r("output", &["vmax", "point", "ymax(VT(\"/out\"))"]),
+        r("spec", &["vmax", "gt", "0.5"]),
+        r("end", &[]),
+    ]);
+    let mut files = Files::new();
+    files.insert("schemify.project".into(), b"schemify 1 project\n".to_vec());
+    let imp = virtuoso::import(
+        &dump,
+        &files,
+        &Mapping::default(),
+        &ImportOptions::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e:?}"));
+    let b = imp
+        .files
+        .iter()
+        .find(|f| f.0 == BENCH)
+        .expect("the bench")
+        .1
+        .clone();
+    let b = String::from_utf8(b).unwrap();
+    schemify_format::parse(b.as_bytes()).unwrap_or_else(|e| panic!("{e:?}\n{b}"));
+    assert!(b.contains("  vmaefile maestro.sdb text ab\n"), "{b}");
+    let t = imp.notes.text();
+    if cfg!(feature = "cadence-records") {
+        assert!(
+            block(&b, "optimize global").contains(&"  goal vmax gt 0.5".to_owned()),
+            "{b}"
+        );
+    } else {
+        assert!(!b.contains("goal vmax"), "{b}");
+        assert!(
+            t.contains("maestro spec T1.vmax: a gt bound is no goal"),
+            "{t}"
+        );
+    }
+}

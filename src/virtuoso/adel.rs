@@ -446,10 +446,9 @@ pub fn attach(states: &[State], imp: &mut Import, existing: &Files, opts: &Impor
             );
             continue;
         };
-        let doc = std::str::from_utf8(&imp.files[k].1)
-            .ok()
-            .and_then(|t| crate::merge::parse_stash(t, FileKind::Shbench).ok())
-            .expect("the import writes a bench that parses");
+        let Some(doc) = written_bench(imp, k, &format!("ADE L state {}", st.name)) else {
+            continue;
+        };
         let mut out = Document::new(FileKind::Shbench);
         copy_header(&mut out, &doc, &[VADEL, VADELFILE]);
         out.push_attr(VADEL);
@@ -488,6 +487,26 @@ pub fn attach(states: &[State], imp: &mut Import, existing: &Files, opts: &Impor
         }
         imp.files[k].1 = bytes;
     }
+}
+
+/// The bench `imp.files[k]` as the import wrote it; `None`, with a report row saying `what`
+/// is not kept, when it does not parse (an import bug, which must not abort the conversion).
+pub(crate) fn written_bench(imp: &mut Import, k: usize, what: &str) -> Option<Document<'static>> {
+    let (path, bytes) = &imp.files[k];
+    let e = match std::str::from_utf8(bytes)
+        .map_err(|e| e.to_string())
+        .and_then(|t| crate::merge::parse_stash(t, FileKind::Shbench))
+    {
+        Ok(doc) => return Some(doc),
+        Err(e) => e,
+    };
+    let path = path.clone();
+    imp.notes.review(
+        "config",
+        &path,
+        format!("{what}: the bench as imported does not parse ({e}): it is not kept"),
+    );
+    None
 }
 
 /// The bench file the import writes for Virtuoso cell `lib/cell` (as `read` names it:

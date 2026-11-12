@@ -233,6 +233,17 @@ fn map(setup: &Setup, test: &str, cell: &str, notes: &mut Notes) -> Mapped {
         return m;
     }
     for sp in setup.specs.iter().filter(|s| s.test == test) {
+        // Schemify's public format has only `min`, `max` and `target` goals; a bound
+        // (`gt`, `lt`, `range`) is the `cadence-records` format's, and a bench with one
+        // does not parse without it.
+        if !cfg!(feature = "cadence-records") && matches!(sp.kind.as_str(), "gt" | "lt" | "range") {
+            notes.review(
+                "spec",
+                cell,
+                format!("maestro spec {}: a {} bound is no goal in this build's format (cadence-records): Maestro keeps it", sp.name, sp.kind),
+            );
+            continue;
+        }
         let x = |v: &str| from_maestro(v, &globals);
         let tail: Option<Vec<Option<String>>> = match sp.kind.as_str() {
             "gt" => Some(vec![Some("gt".into()), x(&sp.min)]),
