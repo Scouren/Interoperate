@@ -115,12 +115,12 @@ fn sfy_cdf_names_dumps_names_only() {
     assert_eq!(
         t,
         r#"("sfyx" 1 "schemify.il 1")
-("cdfnames" "vkit" "nfoo" "nfoo" ("D" "G" "S" "B") ("model" "w" "l" "nf" "m") ("D" "G" "S"))
-("cdfnames" "vkit" "nfoo_b" "nfoo" ("D" "G" "S" "B") ("model" "w" "l" "nf" "m") ("B" "D" "G" "S"))
-("cdfnames" "vkit" "nocdf" "" () () ("A" "B"))
-("cdfnames" "vkit" "pbar" "pbar" ("D" "G" "S") ("model" "w" "l") ("D" "G" "S"))
-("cdfnames" "vkit" "rbaz" "rbaz" ("PLUS" "MINUS") ("model" "r" "m") ("MINUS" "PLUS"))
-("cdfnames" "vkit2" "rbaz" "rbaz" ("PLUS" "MINUS") ("model" "r" "m") ("MINUS" "PLUS"))
+("cdfnames" "vkit" "nfoo" "nfoo" ("D" "G" "S" "B") ("model" "w" "l" "nf" "m") ("D" "G" "S") ())
+("cdfnames" "vkit" "nfoo_b" "nfoo" ("D" "G" "S" "B") ("model" "w" "l" "nf" "m") ("B" "D" "G" "S") ())
+("cdfnames" "vkit" "nocdf" "" () () ("A" "B") ())
+("cdfnames" "vkit" "pbar" "pbar" ("D" "G" "S") ("model" "w" "l") ("D" "G" "S") ())
+("cdfnames" "vkit" "rbaz" "rbaz" ("PLUS" "MINUS") ("model" "value" "m") ("MINUS" "PLUS") (("r" "value")))
+("cdfnames" "vkit2" "rbaz" "rbaz" ("PLUS" "MINUS") ("model" "value" "m") ("MINUS" "PLUS") (("r" "value")))
 ("end")
 "#
     );
@@ -142,13 +142,13 @@ fn the_map_picks_by_the_rules_and_reports_every_cell() {
     assert_eq!(
         map,
         "map fkit:nfoo virtuoso vkit nfoo_b\n  pin d D\n  pin g G\n  pin s S\n  pin b B\n  param w w\n  param l l\n  param nf nf\n  param m m\n\
-         map fkit:rbaz virtuoso vkit rbaz\n  pin p PLUS\n  pin n MINUS\n  param r r\n  param m m\n"
+         map fkit:rbaz virtuoso vkit rbaz\n  pin p PLUS\n  pin n MINUS\n  param r value\n  param m m\n"
     );
     assert_eq!(Mapping::parse(&map).unwrap().maps.len(), 2);
     assert_eq!(
         report,
         "mapped\tfkit:nfoo\tvkit/nfoo_b: over vkit/nfoo by its symbol's terminals are its termOrder\n\
-         mapped\tfkit:rbaz\tvkit/rbaz: over vkit2/rbaz by library order\n\
+         mapped\tfkit:rbaz\tvkit/rbaz: over vkit2/rbaz by library order; through its propMapping: r->value\n\
          needs_review:unmapped\tfkit:nocdf\tno candidate: no Virtuoso cell's CDF model is nocdf (vkit/nocdf has no CDF model)\n\
          needs_review:unmapped\tfkit:pbar\tpin-count mismatch: 4 pins; termOrder: vkit/pbar has 3\n\
          needs_review:unmapped\tfkit:qux\tno candidate: no Virtuoso cell's CDF model is qux\n"

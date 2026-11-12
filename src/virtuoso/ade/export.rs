@@ -181,16 +181,12 @@ pub fn export<F: Fn(&str) -> Option<InstInfo>>(
         .header("corner")
         .map(str::to_owned)
         .or_else(|| te.t.corners.first().map(|x| x.0.clone()));
-    if te.t.corners.len() > 1 {
-        notes.review(
-            "corner",
-            cell,
-            format!(
-                "the OCEAN script runs corner {} only (maestro has all {})",
-                default_corner.as_deref().unwrap_or(""),
-                te.t.corners.len()
-            ),
-        );
+    // Every enabled corner, the bench's default first (gaps2 P15: it ran the first only).
+    let mut corners: Vec<&str> = default_corner.as_deref().into_iter().collect();
+    for (c, en) in &te.t.corners {
+        if *en && !corners.contains(&c.as_str()) {
+            corners.push(c);
+        }
     }
     let ocean = ocean_script(
         &te.t,
@@ -198,7 +194,7 @@ pub fn export<F: Fn(&str) -> Option<InstInfo>>(
         &te.swept,
         &te.ocean_outs,
         &te.plots,
-        default_corner.as_deref(),
+        &corners,
         notes,
     );
     BenchExport {

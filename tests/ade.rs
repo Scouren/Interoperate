@@ -1148,3 +1148,51 @@ fn op_and_ac_outputs_share_one_test() {
         "{got:#?}"
     );
 }
+
+/// The OCEAN script runs every enabled corner, the bench's default first, each with its own
+/// model section, var overrides and results under `<cell>/<corner>/` (gaps2 P15: a live
+/// kit bench, the script ran the first of two foundry corners only).
+#[test]
+fn the_ocean_script_runs_every_enabled_corner() {
+    let bench = "schemify 1 shbench\n  corner ff\n\nvar vdd 0.8\n\noutput vo \"v(out)\"\n\n\
+                 code sim spice\n  | .tran 1p 2n\n\n\
+                 corner tt\n  lib $PDK/models.lib tt\n\n\
+                 corner ff\n  lib $PDK/models.lib ff\n  set vdd 0.88\n\n\
+                 corner off\n  lib $PDK/models.lib ss\n  enable false\n";
+    let d = design(&project(bench));
+    let e = virtuoso::export(
+        &d,
+        &[d.find("tb.shbench").unwrap()],
+        &Mapping::default(),
+        &ExportOptions::default(),
+    )
+    .unwrap();
+    let ocn = &e.ocean.iter().find(|f| f.0.ends_with(".ocn")).unwrap().1;
+    let ff = ocn.find("; corner ff").expect("ff");
+    let tt = ocn.find("; corner tt").expect("tt");
+    assert!(ff < tt, "the default corner first:\n{ocn}");
+    assert!(
+        !ocn.contains("; corner off") && !ocn.contains("\"ss\""),
+        "{ocn}"
+    );
+    let (a, b) = ocn.split_at(tt);
+    assert!(
+        a.contains(r#"modelFile('("$PDK/models.lib" "ff"))"#)
+            && a.contains("desVar(\"vdd\" 0.88)")
+            && a.contains("resultsDir(\"tb/ff/psf\")")
+            && a.contains("?output \"tb/ff/vo.txt\""),
+        "{ocn}"
+    );
+    assert!(
+        b.contains(r#"modelFile('("$PDK/models.lib" "tt"))"#)
+            && b.contains("desVar(\"vdd\" 0.8)")
+            && b.contains("?output \"tb/tt/vo.txt\""),
+        "{ocn}"
+    );
+    assert_eq!(ocn.matches("exit()").count(), 1, "{ocn}");
+    assert!(
+        !e.notes.text().contains("runs corner"),
+        "{}",
+        e.notes.text()
+    );
+}

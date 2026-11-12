@@ -110,19 +110,19 @@ pub(super) fn cell_value(d: &Design, ci: usize, src: &str) -> Option<f64> {
 }
 
 /// The OCEAN script of test `t` (§9.6): runnable headless (`ocean -nograph < <cell>.ocn`)
-/// after `SfyImport` created the bench schematic. Corner `corner` (the
-/// bench's default, else its first) supplies the model files, var overrides and
-/// temperature; every swept var is a nested `paramAnalysis`; each output is one
-/// `ocnPrint` table `<cell>/<output>.txt`, each plot one `<cell>/<y>_vs_<x>.txt` of
-/// `waveVsWave`. A swept point that is not a number literal is reported (`sweep`) and the
-/// sweep runs without it.
+/// after `SfyImport` created the bench schematic. One run per corner of `corners` (none:
+/// the globals only), each with its model files, var overrides and temperature; every
+/// swept var is a nested `paramAnalysis`; each output is one `ocnPrint` table
+/// `<cell>/<output>.txt` (with several corners `<cell>/<corner>/<output>.txt`), each plot
+/// one `<cell>/<y>_vs_<x>.txt` of `waveVsWave`. A swept point that is not a number literal
+/// is reported (`sweep`) and the sweep runs without it.
 pub(super) fn ocean_script(
     t: &Test,
     cell: &str,
     swept: &[(String, String)],
     outs: &[(String, String)],
     plots: &[(String, String)],
-    corner: Option<&str>,
+    corners: &[&str],
     notes: &mut Notes,
 ) -> String {
     use std::fmt::Write as _;
@@ -137,8 +137,13 @@ pub(super) fn ocean_script(
          ; defines library {lib} (OCEAN finds libraries through ./cds.lib) and where {dir}/ may\n\
          ; be created; if SfyImport had ?lib, put that library in design() below:\n\
          ;   ocean -nograph < {dir}.ocn\n\
-         ; Writes {dir}/psf (results) and {dir}/<output>.txt (one ocnPrint table per output).",
-        lib = t.lib
+         ; Writes {dir}/psf (results) and {dir}/<output>.txt (one ocnPrint table per output){per}.",
+        lib = t.lib,
+        per = if corners.len() > 1 {
+            ", per corner under {dir}/<corner>/"
+        } else {
+            ""
+        }
     );
     let _ = writeln!(o, "createDir({})", skill_str(dir));
     let _ = writeln!(o, "simulator('spectre)");
@@ -149,6 +154,45 @@ pub(super) fn ocean_script(
         skill_str(&t.cell),
         skill_str(&t.view)
     );
+    let one: [Option<&str>; 1] = [corners.first().copied()];
+    let runs: Vec<Option<&str>> = if corners.len() > 1 {
+        corners.iter().map(|c| Some(*c)).collect()
+    } else {
+        one.to_vec()
+    };
+    for (k, &corner) in runs.iter().enumerate() {
+        let dir = match corner.filter(|_| corners.len() > 1) {
+            Some(c) => {
+                let d = format!("{dir}/{c}");
+                let _ = writeln!(o, "; corner {c}\ncreateDir({})", skill_str(&d));
+                d
+            }
+            None => dir.clone(),
+        };
+        // Reported once, not per corner.
+        let mut quiet = Notes::default();
+        let notes = if k == 0 { &mut *notes } else { &mut quiet };
+        corner_run(&mut o, t, cell, &dir, swept, outs, plots, corner, notes);
+    }
+    let _ = writeln!(o, "exit()");
+    debug_assert!(o.ends_with("exit()\n") && o.contains("design("));
+    o
+}
+
+/// One run of [`ocean_script`] in results directory `dir`, corner `corner`.
+#[allow(clippy::too_many_arguments)]
+fn corner_run(
+    o: &mut String,
+    t: &Test,
+    cell: &str,
+    dir: &str,
+    swept: &[(String, String)],
+    outs: &[(String, String)],
+    plots: &[(String, String)],
+    corner: Option<&str>,
+    notes: &mut Notes,
+) {
+    use std::fmt::Write as _;
     let _ = writeln!(o, "resultsDir({})", skill_str(&format!("{dir}/psf")));
     let in_scope = |sc: &str| sc.is_empty() || Some(sc) == corner;
     let models: Vec<String> = t
@@ -296,7 +340,4 @@ pub(super) fn ocean_script(
             skill_str(&format!("{dir}/{y}_vs_{x}.txt"))
         );
     }
-    let _ = writeln!(o, "exit()");
-    debug_assert!(o.ends_with("exit()\n") && o.contains("design("));
-    o
 }
