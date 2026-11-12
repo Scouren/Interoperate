@@ -11,6 +11,8 @@ use spicerack::syntax::resolve::{DefKind, Form};
 
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/pdk_scan");
 
+/// `pdk-models` on these arguments: its report without the `models` lines (each checked:
+/// it names the converted entry, a file under `out`, absolute), and the exit status.
 fn run(root: &Path, entry: &str, from: &str, to: &str, out: &Path) -> (String, u8) {
     let args = [
         "--root",
@@ -24,7 +26,22 @@ fn run(root: &Path, entry: &str, from: &str, to: &str, out: &Path) -> (String, u
         "-o",
         out.to_str().unwrap(),
     ];
-    pdk_models::run(&args.map(String::from))
+    let (text, code) = pdk_models::run(&args.map(String::from));
+    let mut rest = String::new();
+    for l in text.lines() {
+        match l.strip_prefix("models ") {
+            Some(p) => {
+                let p = Path::new(p);
+                assert!(p.is_absolute() && p.is_file() && p.ends_with(entry), "{l}");
+                assert_eq!(
+                    std::fs::canonicalize(p).unwrap(),
+                    std::fs::canonicalize(out.join(entry)).unwrap()
+                );
+            }
+            None => rest += &format!("{l}\n"),
+        }
+    }
+    (rest, code)
 }
 
 fn scratch(name: &str) -> PathBuf {
@@ -146,7 +163,19 @@ fn a_spectre_kit_reports_its_notes_and_refusals_by_code() {
         "-o",
         twice.to_str().unwrap(),
     ];
-    assert_eq!(pdk_models::run(&args.map(String::from)), (want.into(), 1));
+    // One `models` line per entry, in their order, before `end`.
+    let (text, code) = pdk_models::run(&args.map(String::from));
+    let models: Vec<&str> = text.lines().filter(|l| l.starts_with("models ")).collect();
+    assert!(
+        matches!(models[..], [a, b] if a.ends_with("/top.scs") && b.ends_with("/devices.scs")),
+        "{text}"
+    );
+    let rest: String = text
+        .lines()
+        .filter(|l| !l.starts_with("models "))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    assert_eq!((rest.as_str(), code), (want, 1));
     for f in [
         "top.scs",
         "devices.scs",
