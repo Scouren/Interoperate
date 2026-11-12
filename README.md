@@ -230,16 +230,15 @@ directory when done. Each prints on stderr how long the host part took.
   cellview or CDF that already exists in Virtuoso is left alone: the log refuses it, the
   command says how many and exits 1. The OCEAN scripts the export writes are not sent.
 
-Only masters from the `--ref` libraries leave the host, with their symbols and CDF. Without
-`--ref` these are `analogLib` and `basic`; any `--ref` replaces that list. So a PDK's devices
-stay on the host unless you name their library. An instance of a master that was not dumped
+Only masters from `analogLib`, `basic` and the `--ref` libraries leave the host, with their
+symbols and CDF. So a PDK's devices stay on the host unless you name their library. An instance of a master that was not dumped
 keeps that master. If `interop.map` sends the master to a local cell, the instance goes there
 as usual. If not, the import report has one `needs_review:master` row per such master, and the
 pull's summary counts them per library and prints the `--ref` flags that would bring them. To
 dump the masters of `myPdk` too, if you may copy that PDK's symbols and CDF:
 
 ```
-schemify-interop virtuoso-pull proj --host pdkhost --vlib myLib --ref analogLib --ref basic --ref myPdk
+schemify-interop virtuoso-pull proj --host pdkhost --vlib myLib --ref myPdk
 ```
 
 The host side reads the same variables as `pdk-map --host` (table under PDK map below):
