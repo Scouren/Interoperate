@@ -554,12 +554,23 @@ pub fn spectre_siminfo(t: &str, pins: &[String], params: &[(String, String)]) ->
     let mut tail: Vec<(bool, String)> = rest[close + 1..].to_vec();
     let mut f = Vec::new();
     if after.is_empty() {
-        // master is a hole: only `{model}`
+        // master is a hole: `{model}`, or the model else the component name (import's form
+        // of an empty model beside a componentName)
         let (true, h) = tail.first()? else {
             return None;
         };
-        if h != "model" {
-            return None;
+        let comp = match h.as_str() {
+            "model" => None,
+            h => Some(
+                h.strip_prefix("model != \"\" ? model : \"")?
+                    .strip_suffix('"')?,
+            ),
+        };
+        if let Some(c) = comp {
+            if c.is_empty() || c.contains(['"', '{', '}', ' ']) {
+                return None;
+            }
+            f.push(("componentName".into(), SimVal::Str(c.into())));
         }
         tail.remove(0);
         f.push(("otherParameters".into(), SimVal::List(vec!["model".into()])));
