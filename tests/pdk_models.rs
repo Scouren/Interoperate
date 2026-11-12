@@ -283,9 +283,10 @@ fn a_remote_kit_is_converted_on_its_host_for_the_selected_simulator() {
     // A Schemify simulator's name is the dialect: the tree is written there, and `models`
     // names the file `set PDK_MODELS` takes.
     let (kit, out, text, code) = on_host("host", "ngspice");
+    // The agent's path is the real one (macOS: /var is a link to /private/var).
     let want = format!(
         "converted 5 file(s)\nmodels {}/top.scs\nend\n",
-        out.display()
+        std::fs::canonicalize(&out).unwrap().display()
     );
     assert_eq!((text.as_str(), code), (want.as_str(), Some(0)));
     assert!(read(&out, "devices.scs").contains(".subckt nfet_lvt"));
