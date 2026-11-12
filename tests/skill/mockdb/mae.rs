@@ -721,7 +721,7 @@ pub fn call(db: &mut MockDb, name: &str, args: &[V]) -> Option<Result<V, String>
             let (sig, ex) = (st(key(&kw, "signalName")), st(key(&kw, "expr")));
             let ok = match kind.as_str() {
                 "point" => ex.is_some() && sig.is_none(),
-                "net" => sig.is_some() && ex.is_none(),
+                "net" | "terminal" => sig.is_some() && ex.is_none(),
                 _ => false,
             };
             if !ok {
@@ -767,6 +767,16 @@ pub fn call(db: &mut MockDb, name: &str, args: &[V]) -> Option<Result<V, String>
                         ("signal", opt(&o.signal)),
                         ("expression", opt(&o.expr)),
                         ("plot", tf(!o.off)),
+                        // Live ICADVM20.1: ~>type is the symbol terminal for a terminal
+                        // output, nil for the others (a_probe).
+                        (
+                            "type",
+                            if o.kind == "terminal" {
+                                V::sym("terminal")
+                            } else {
+                                V::Nil
+                            },
+                        ),
                     ],
                 );
                 db.mae.out_objs.push((id, k, s0(0), o.name.clone()));

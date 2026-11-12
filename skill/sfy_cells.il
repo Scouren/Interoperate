@@ -620,7 +620,13 @@
                      (SfyMasterFile lib cell v)))
       (cond
         ((or (member v (list "schematic" "symbol")) (member v dumped) (null file)) nil)
-        ((member file (list "maestro.sdb" "expand.cfg" "data.sdb")) nil)
+        ((or (equal file "expand.cfg") (and (equal file "maestro.sdb") (equal v "maestro"))) nil)
+        ;; Another maestro view (maestro_b, a Monte Carlo copy) and a legacy ADE XL view
+        ;; (data.sdb) are not dumped: one maestro view per cell (sfy_ade.il).
+        ((equal file "maestro.sdb")
+          (SfyPut port "skipview" (list v "maestro.sdb: a second maestro view; only the view maestro is dumped")))
+        ((equal file "data.sdb")
+          (SfyPut port "skipview" (list v "data.sdb: an ADE XL view; maeMigrateADEXLToMaestro makes it a maestro view")))
         ;; Constraint Manager keeps a cell's constraints in its constraint view (live
         ;; ICADVM20.1: prop.cfg beside them; no constraint group on the schematic).
         ((equal v "constraint")

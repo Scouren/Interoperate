@@ -390,11 +390,12 @@ Every conversion lists its losses in the report. The main ones:
 - Maestro results (`SfyAdeResults`, then `schemify-interop maestro-results <project> <dump>
   <bench>`) become one imported Schemify run of the bench: each corner and design point is
   a job with its waveforms, values and spec verdicts, read exactly from the history's
-  `.rdb`. Only the first test maps. Reported, not mapped: the other tests, values reduced
-  across corners or sweeps, Monte Carlo statistics, and the `near` verdict (it comes across
-  as `fail`). sp, stb, pss and noise totals and the operating point come across; noise
-  contributions, pac sidebands, stb margins and `dcOpInfo` device values are skipped lines,
-  and a pss harmonic axis is a plain sweep.
+  `.rdb`; a Monte Carlo history's points are its samples. Only the first test maps.
+  Reported, not mapped: the other tests, values reduced across corners or sweeps, Monte
+  Carlo statistics, and the `near` verdict (it comes across as `fail`). sp, stb, pss and
+  noise totals, the operating point and pac's sidebands (one block each) come across;
+  `dcOpInfo` device values need Schemify's ngspice name map and are reported; noise
+  contributions and stb margins are skipped lines, and a pss harmonic axis is a plain sweep.
 - Layout views cross as GDS (`SfyLayoutExport`, `schemify-interop layout-export`/
   `layout-import`, `SfyLayoutImport`): `<cell>.<view>.gds` beside the cell for KLayout,
   with a generated `.lyp`/`.lyt`. An unchanged GDS gives the OA view back byte for byte; an

@@ -29,6 +29,10 @@ pub const ROWS: &[(&str, &str)] = &[
     ("outputs", ""),
     ("v", "t"),
     ("i", "t"),
+    // Families (pac sidebands): the mock's results have none.
+    ("famIsFamily", "g"),
+    ("sweepValues", "g"),
+    ("famValue", "g g"),
     ("drGetWaveformXVec", "g"),
     ("drGetWaveformYVec", "g"),
     ("drVectorLength", "g"),
@@ -219,6 +223,7 @@ pub fn call(_db: &mut MockDb, name: &str, args: &[V]) -> Option<Result<V, String
                 let c = tagged(&args[0], "complex").ok_or("*Error* not complex")?;
                 c[usize::from(name == "imag")].clone()
             }
+            "famIsFamily" | "sweepValues" | "famValue" => V::Nil,
             "system" => {
                 st.commands.push(s0(0));
                 V::Int(0)

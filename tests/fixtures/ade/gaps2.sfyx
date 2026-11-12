@@ -61,6 +61,7 @@
 ("corner" "C2" 1)
 ("var" "temperature" "85" "C2")
 ("output" "st" "point" "settlingTime(VT(\"/out\") ymin(xval(VT(\"/out\"))) t ymax(xval(VT(\"/out\"))) t 100*0.01/abs(value(VT(\"/out\") ymax(xval(VT(\"/out\"))))-value(VT(\"/out\") ymin(xval(VT(\"/out\"))))))")
+("output" "ti" "terminal" "/R0/PLUS")
 ("output" "ymxa" "point" "ymax(VT(\"/out\"))")
 ("maenote" "output" "output ymxa is evaluated over corners; Schemify evaluates every output per job")
 ("maenote" "spec" "spec of ymxa: (\"tol\" \"0.1\" \"10%\") has no Schemify spec (only > < and range)")

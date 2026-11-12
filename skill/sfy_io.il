@@ -319,7 +319,7 @@
     hdbOpen hdbSetTopCellViewName hdbSave hdbClose getDirFiles isDir system
     envGetVal maeSetSetup maeSetParameter axlSetEnabled
     axlGetHistoryEntry axlGetHistoryResults axlGetPointPsfDir openResults results
-    selectResult outputs v i drGetWaveformXVec drGetWaveformYVec drVectorLength drGetElem
+    selectResult outputs v i famIsFamily sweepValues famValue drGetWaveformXVec drGetWaveformYVec drVectorLength drGetElem
     complexp real imag
     sh techGetTechFile techGetDBUPerUU drDumpDrf dbRefreshCellView ddDeleteObj))
 

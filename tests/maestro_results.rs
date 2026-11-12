@@ -587,3 +587,95 @@ fn live_history_against_nutbin() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The lane A results check (`live/checks/a_res.il`, `$SFYCHECK_WORK/out/a_res` fetched into
+/// `$SFY_A_RES`): its cells imported into a project, the rc bench given an output reading the
+/// operating point, the history imported as a run: the job's raw has the vector Schemify's
+/// `op("R0", "i")` reads through the name map (`@rr0[i]`, the R0/R1 divider: 0.5 mA), Spectre's `pwr` as ngspice's
+/// `p`, and pac as one dataset of 15 sideband steps.
+#[cfg(feature = "cli")]
+#[test]
+#[ignore = "needs the live check's output: SFY_A_RES=<dir> (live/checks/run.sh a_res), and \
+            maestro-results the design hash and ngspice name map (not in Schemify's public \
+            interface yet)"]
+fn live_a_res_operating_point_and_sidebands() {
+    let live = std::path::PathBuf::from(std::env::var("SFY_A_RES").expect("SFY_A_RES"));
+    let dir = std::env::temp_dir().join(format!("sfy-ares-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("dump")).unwrap();
+    for e in std::fs::read_dir(&live).unwrap().flatten() {
+        if e.file_type().unwrap().is_file() {
+            std::fs::copy(e.path(), dir.join("dump").join(e.file_name())).unwrap();
+        }
+    }
+    std::fs::write(dir.join("schemify.project"), "schemify 1 project\n").unwrap();
+    let run =
+        |args: &[&str]| interop::cli::run(&args.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+    let d = dir.to_str().unwrap();
+    assert_eq!(run(&["virtuoso-import", d, "dump/cells.sfyx"]), 0);
+    let bench = dir.join("sfyprobe_a/rc.shbench");
+    let mut text = std::fs::read_to_string(&bench).unwrap();
+    text.push_str("\noutput ir0 \"op(\\\"R0\\\", \\\"i\\\")\"\n");
+    std::fs::write(&bench, text).unwrap();
+    let dump = "dump/Interactive.0.sfyx";
+    assert_eq!(
+        run(&["maestro-results", d, dump, "sfyprobe_a/rc.shbench"]),
+        0
+    );
+    let rundir = std::fs::read_dir(dir.join(".schemify/runs"))
+        .unwrap()
+        .flatten()
+        .next()
+        .unwrap()
+        .path();
+    let mut raws: Vec<_> = std::fs::read_dir(&rundir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path().join("out.raw"))
+        .filter(|p| p.exists())
+        .collect();
+    raws.sort();
+    let plots = raws
+        .iter()
+        .map(|p| parse_raw(&std::fs::read(p).unwrap()).unwrap())
+        .find(|ps| ps.iter().any(|p| p.find_var("@rr0[i]").is_some()))
+        .expect("a job with R0's operating point");
+    let op = |v: &str| {
+        plots
+            .iter()
+            .find_map(|p| Some(p.col(p.find_var(v)?)[0]))
+            .unwrap_or_else(|| panic!("{v}"))
+    };
+    let (i, p) = (op("@rr0[i]"), op("@rr0[p]"));
+    assert!((i - 5e-4).abs() < 1e-9, "{i}");
+    assert!((p - 2.5e-4).abs() < 1e-9, "{p}");
+    // pac: its 15 sidebands (-7..7), 5 frequencies each, as consecutive plots of the same
+    // variables (one stepped dataset to Schemify), which the plot after them does not share.
+    let k = plots
+        .windows(15)
+        .position(|w| {
+            w.iter()
+                .all(|p| p.is_complex() && p.names == w[0].names && p.len() == 5)
+        })
+        .expect("15 sideband plots");
+    assert!(plots.get(k + 15).is_none_or(|p| p.names != plots[k].names));
+}
+
+/// A live 3-sample Monte Carlo history (`live/checks/a_probe2.il`, ICADVM20.1, MonteCarlo.0:
+/// one Spectre `montecarlo` run, three points of one design point): each point is its
+/// sample, so the run's job keys are distinct (inventory row 22: all were NO_SAMPLE).
+#[cfg(feature = "cli")]
+#[test]
+fn a_monte_carlo_history_gives_each_sample_its_job() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/live/a_mc");
+    let d =
+        results::parse(&std::fs::read_to_string(dir.join("MonteCarlo.0.sfyx")).unwrap()).unwrap();
+    let h = results::convert(&d, &std::fs::read(dir.join("MonteCarlo.0.rdb")).unwrap()).unwrap();
+    let samples: Vec<Option<u32>> = h.jobs.iter().map(|j| j.sample).collect();
+    assert_eq!(samples, [Some(1), Some(2), Some(3)]);
+    let text = results::results_file(&h, &"0".repeat(64), &["vout".into()], &[], &[]);
+    assert!(text.contains("\njob 2 done\n  sample 3\n"), "{text}");
+    // Schemify's results reader is not in its public SDK: the jobs' sample lines.
+    let samples: Vec<Vec<String>> = (0..3).map(|j| job_attr(&text, j, "sample")).collect();
+    assert_eq!(samples, [["1"], ["2"], ["3"]], "{text}");
+}

@@ -23,24 +23,12 @@
 ;; that has a maestro view: per test (by name) maestro, global vars, the test's own vars,
 ;; enabled analyses, test model files, corners with their models and vars, outputs, specs,
 ;; definition files.
-;; A cell's other maestro views (maestro_b, a Monte Carlo copy: any view holding a
-;; maestro.sdb) are not dumped; each is a maenote of the dumped view's first test.
+;; A cell's other maestro views and ADE XL views are skipview records of the cell
+;; (sfy_cells.il SfyDumpTextViews).
 (procedure (SfyAdeExport port lib cells)
-  (let ((sfyAdeOther nil))
-    (foreach cell cells
-      (when (ddGetObj lib cell "maestro")
-        (setq sfyAdeOther (SfyAdeOtherViews lib cell))
-        (SfyAdeDumpCell port lib cell)))))
-
-;; The names of cell lib/cell's views but maestro that hold a maestro.sdb, sorted.
-(procedure (SfyAdeOtherViews lib cell)
-  (let ((c (ddGetObj lib cell)) (v nil) (out nil))
-    (foreach n (and c (car (errset (getSGq (getSGq c views) name))))
-      (setq v (ddGetObj lib cell n))
-      (when (and (nequal n "maestro") v (stringp (getSGq v readPath))
-                 (isFile (strcat (getSGq v readPath) "/maestro.sdb")))
-        (setq out (cons n out))))
-    (sort out 'alphalessp)))
+  (foreach cell cells
+    (when (ddGetObj lib cell "maestro")
+      (SfyAdeDumpCell port lib cell))))
 
 ;; One maestro view, opened read-only and always closed. A read-only session answers setup
 ;; database 0 (ICADVM20.1, live run 2026-10-15: every axl call then signals ASSEMBLER-2404),
@@ -65,10 +53,8 @@
                 (unless (errset (SfyAdeDumpTest port lib cell sess sdb test stored) t)
                   (SfyRefuse 0 (sprintf nil "%s/%s/maestro test %s: SKILL error %s" lib cell test
                                  (SfyErrMsg))))
-                ;; The view's own setup goes with its first test only, and so do the
-                ;; notes of the other maestro views.
-                (setq stored nil)
-                (setq sfyAdeOther nil)))))
+                ;; The view's own setup goes with its first test only.
+                (setq stored nil)))))
         (SfyAdeClose sess)))))
 
 ;; The axlExportSetup/axlImportSetup tags: every part of the active setup an export holds.
@@ -240,8 +226,6 @@
     (when (and (SfyAdeArg targs "cell")
                (nequal (SfyAdeArg targs "cell") cell))
       (SfyPut port "testdesign" (list (or (SfyAdeArg targs "lib") lib) (SfyAdeArg targs "cell"))))
-    (foreach v sfyAdeOther
-      (SfyPut port "maenote" (list "config" (sprintf nil "maestro view %s of %s/%s is not dumped (one maestro view per cell): open it as maestro to carry it" v lib cell))))
     ;; The global variables (GUESS(G18): maeGetSetup ?typeName "variables" lists their
     ;; names) and the test temperature (simulator option temp, GUESS(G28)) as the var
     ;; "temperature", which the Rust side reads as the test temperature; then the test's own
@@ -359,7 +343,13 @@
             (SfyPut port "maenote"
               (list "output" (sprintf nil "output %s is evaluated over %s; Schemify evaluates every output per job"
                                (getSGq so name) (SfyAtomStr ev))))))
-        ((stringp o) (setq outs (cons (list (getSGq so name) "net" o) outs)))
+        ;; A terminal output (~>type terminal, live) keeps its kind; else a net.
+        ((stringp o)
+          (setq outs (cons (list (getSGq so name)
+                                 (if (equal (SfyAtomStr (car (errset (getSGq so type)))) "terminal")
+                                   "terminal" "net")
+                                 o)
+                       outs)))
         ;; An OCEAN-script or MATLAB measurement: no text to carry, the rest still goes.
         (t (SfyPut port "maenote"
              (list "output" (sprintf nil "output %s (%s) has neither an expression nor a signal: not dumped"
@@ -817,8 +807,8 @@
               (setq outs (cons (nth 0 f) outs))
               (cond
                 ((not (member (nth 0 f) old))
-                  (if (equal (nth 1 f) "net")
-                    (maeAddOutput (nth 0 f) name ?outputType "net" ?signalName (nth 2 f) ?session sess)
+                  (if (member (nth 1 f) (list "net" "terminal"))
+                    (maeAddOutput (nth 0 f) name ?outputType (nth 1 f) ?signalName (nth 2 f) ?session sess)
                     (maeAddOutput (nth 0 f) name ?outputType "point" ?expr (nth 2 f) ?session sess)))
                 ((member (nth 2 f) (SfyAdeOutTexts sess name (nth 0 f))) t)
                 (t

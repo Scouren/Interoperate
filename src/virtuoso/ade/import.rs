@@ -136,8 +136,8 @@ pub(super) fn parse(records: &[Record]) -> Result<Test, Error> {
             "output" => {
                 r.arity(3)?;
                 let (n, k, e) = (r.str(0)?, r.str(1)?, r.str(2)?);
-                if !matches!(k, "point" | "net") {
-                    return Err(r.err(format!("output {n}: kind `{k}` (point or net)")));
+                if !matches!(k, "point" | "net" | "terminal") {
+                    return Err(r.err(format!("output {n}: kind `{k}` (point, net or terminal)")));
                 }
                 if n.is_empty() || t.outputs.iter().any(|o| o.0 == n) {
                     return Err(r.err(format!("output `{n}` empty or twice")));
@@ -289,7 +289,7 @@ pub(super) fn parse(records: &[Record]) -> Result<Test, Error> {
 /// The first malformed record, with its line: wrong arity or element types, `enable` other
 /// than 0/1, an option that is not `(key value)` strings, a var/model naming a corner not
 /// declared before it, a spec naming an output not declared before it or an op other than
-/// `lt`/`gt`, an output kind other than `point`/`net`, a name twice in its kind, a
+/// `lt`/`gt`, an output kind other than `point`/`net`/`terminal`, a name twice in its kind, a
 /// definition file that is a path, a second `maesdb` or a test's second `maestate`.
 pub fn check(records: &[Record]) -> Result<(), Error> {
     parse(records).map(|_| ())
@@ -641,6 +641,11 @@ pub fn import(tests: &[&[Record]], bench: &mut Document<'static>, cell: &str, no
         .filter(|r| r.tag == "maestate")
         .filter_map(|r| Some((r.str(0).ok()?.to_owned(), r.text(1).ok()?)))
         .collect();
+    for (test, st) in &states {
+        for why in state_notes(st) {
+            notes.review("config", cell, format!("maestro test {test}: {why}"));
+        }
+    }
     let off: Vec<(String, String)> = ts
         .iter()
         .flat_map(|t| {
@@ -762,6 +767,60 @@ pub fn import(tests: &[&[Record]], bench: &mut Document<'static>, cell: &str, no
     // §9.9: the stored setup's run modes, with the first test's specs as goals (lane L5).
     runmode::import(ok[0], &first.name, bench, cell, notes);
     assert!(bench.record_count() >= before, "the import only appends");
+}
+
+/// The settings of a test's state (`active.state`, §9.7) a Schemify run does not take:
+/// an include path, stimulus files, a save set other than `allpub`, Spectre APS/X mode
+/// (`turboSwitch` on, `uniMode`). Fields as ICADVM20.1 writes them (live a_probe2):
+/// `<field Name="includePath" Type="string">"/tmp/inc"</field>`.
+pub(super) fn state_notes(st: &str) -> Vec<String> {
+    let field = |name: &str| -> Vec<&str> {
+        let key = format!("<field Name=\"{name}\" Type=\"");
+        st.match_indices(&key)
+            .filter_map(|(k, _)| {
+                let rest = &st[k + key.len()..];
+                let v = &rest[rest.find('>')? + 1..];
+                Some(v[..v.find("</field>")?].trim())
+            })
+            .collect()
+    };
+    let unquote = |v: &str| v.trim_matches('"').to_owned();
+    let mut out = Vec::new();
+    for v in field("includePath")
+        .into_iter()
+        .map(unquote)
+        .filter(|v| !v.is_empty())
+    {
+        out.push(format!(
+            "include path {v}: Schemify resolves includes beside the bench"
+        ));
+    }
+    for v in field("stimulusFile")
+        .into_iter()
+        .filter(|v| !matches!(*v, "nil" | "" | "\"\""))
+    {
+        out.push(format!(
+            "stimulus file(s) {v}: not carried (a Schemify bench draws its sources)"
+        ));
+    }
+    for v in field("save").into_iter().map(unquote) {
+        if !matches!(v.as_str(), "" | "allpub" | "t") {
+            out.push(format!(
+                "save set {v}: a Schemify run saves its own signals"
+            ));
+        }
+    }
+    if field("turboSwitch").contains(&"t") {
+        let mode = field("uniMode")
+            .first()
+            .map_or("APS".to_owned(), |m| unquote(m));
+        out.push(format!(
+            "Spectre runs in {mode} mode (turbo): a Schemify run is plain Spectre"
+        ));
+    }
+    out.sort();
+    out.dedup();
+    out
 }
 
 /// One output's spec bounds `(op, value)`.

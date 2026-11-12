@@ -274,9 +274,8 @@ fn sky130_from_xschem_maps_to_a_virtuoso_kit_and_back() {
     files3.extend(imp.files);
     let mirror = text(&files3, "sky130_fd_pr/nfet_01v8.shprim");
     // Without the map the re-mastering stubs are M1's connections (live check x_xs2v).
-    // ponytail: the Spectre netlist should have `M1 (D G GND GND) sky130_fd_pr__nfet_01v8`;
-    // it did not on `development` either (this test failed there), and the snapshot is of
-    // that input. Check it in a Schemify development build.
+    // The Spectre netlist of this input has M1 on `(D G GND GND)`, the kit's nfet (one ground
+    // per cellview; Schemify c5db29e1 netlisted the snapshot's input so).
     netlist(&files3, TB, "Spectre");
     assert!(
         mirror.contains("provenance \"virtuoso sky130_fd_pr/nfet_01v8\"")
@@ -515,4 +514,34 @@ fn live_xs2v() {
         );
     }
     assert!(fails.is_empty(), "{fails:?}");
+}
+
+/// Ground across the three tools (gaps round 2): an xschem divider (gnd.sym `lab=GND`)
+/// imports with xschem's name `GND` (CDL/LVS keep it), which ngspice reads as ground but
+/// Schemify's Spectre dialect writes as a plain `global GND` (core_A C13, live: Spectre runs
+/// the divider with a floating GND). The netlist's input is a snapshot (`common::frozen_input`);
+/// the live run's netlist comes from a Schemify development build.
+#[test]
+fn an_xschem_ground_is_gnd_in_the_spectre_netlist() {
+    let mut inputs = inputs();
+    inputs.retain(|(p, _)| p.starts_with("sys/"));
+    let sch = "C {vsource.sym} 0 0 0 0 {name=V1 value=1}\nC {lab_pin.sym} 0 -30 0 0 {name=l1 lab=IN}\n\
+               C {gnd.sym} 0 30 0 0 {name=l2 lab=GND}\nC {res.sym} 100 0 0 0 {name=R1 value=1k}\n\
+               C {lab_pin.sym} 100 -30 0 0 {name=l3 lab=IN}\nC {lab_pin.sym} 100 30 0 0 {name=l4 lab=OUT}\n\
+               C {res.sym} 200 0 0 0 {name=R2 value=1k}\nC {lab_pin.sym} 200 -30 0 0 {name=l5 lab=OUT}\n\
+               C {gnd.sym} 200 30 0 0 {name=l6 lab=GND}\n";
+    inputs.push(("x/mylib/div.sch".into(), format!("{V12}{sch}").into_bytes()));
+    let refs: Vec<(&str, &[u8])> = inputs
+        .iter()
+        .map(|(p, b)| (p.as_str(), b.as_slice()))
+        .collect();
+    let roots = ["x".to_owned(), "sys/devices".to_owned()];
+    let opts = Options {
+        roots: &roots,
+        ..Options::default()
+    };
+    let (out, _) = translate_library(&refs, &opts);
+    let files: Files = out.into_iter().collect();
+    // The Spectre netlist of this input has `global GND` and `(OUT GND)` (Schemify c5db29e1).
+    netlist(&files, "mylib/div.shbench", "Spectre");
 }

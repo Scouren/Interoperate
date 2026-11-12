@@ -22,7 +22,7 @@ line 0 -30 0 30
 schemify 1 shbench
   provenance "xschem mylib/tb.sch"
   xfp f371d132ab2e7ddf
-  vsch 8cb57a91ef8f472e
+  vsch 51b67ce181b7e5ee
 
 inst bkecrn sky130_fd_pr:nfet_01v8
   at 0 0 R0
@@ -54,12 +54,14 @@ label drhx2r 20 -30 R0 D
 label f8kkgy 200 30 R0 G
 label fq6bdq 0 -50 R0 D
 label he0n1x 200 -30 R0 D
-label mx6ryh 50 0 R0 0
+label mx6ryh 50 0 R0 GND
+  global true
 label pkcras 20 30 R0 GND
   global true
 label r0b6my 20 0 R0 GND
   global true
-label rs7tb7 0 50 R0 0
+label rs7tb7 0 50 R0 GND
+  global true
 label xrszvy 20 0 R0 GND
   global true
 == schemify.project

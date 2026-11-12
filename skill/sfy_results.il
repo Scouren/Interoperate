@@ -114,7 +114,8 @@
       (when port
         (unwindProtect
           (foreach r (sort (mapcar (lambda (x) (SfyAtomStr x)) (car (errset (results)))) nil)
-            (when (car (errset (selectResult (stringToSymbol r))))
+            (when (and (car (errset (selectResult (stringToSymbol r))))
+                       (not (and (SfyResSidebands port r) (setq any t))))
               (fprintf port "# analysis %s\n" r)
               (foreach o (sort (mapcar (lambda (x) (SfyAtomStr x)) (car (errset (outputs)))) nil)
                 ;; A net is a voltage; what v() does not answer, a terminal, is a current.
@@ -136,6 +137,15 @@
                     (fprintf port "# %s 1 points %s\n0 %.17g\n" o
                       (if (SfyResIsNum (car (errset (v o)))) "V" "I") (float w))
                     (setq any t))
+                  ;; A device's operating-point parameters (live: v("/R0")~>?? answers
+                  ;; ("trise" nan "v" 0.5 "i" 0.0005 ...)), one point each as "<inst>:<param>";
+                  ;; Rust names them as ngspice's @<dev>[<param>] through the bench.
+                  ((and (equal r "dcOpInfo") (setq w (car (errset (getSGq (v o) ??)))) (listp w))
+                    (while (cdr w)
+                      (when (and (stringp (car w)) (numberp (cadr w)))
+                        (fprintf port "# %s:%s 1 points V\n0 %.17g\n" o (car w) (float (cadr w)))
+                        (setq any t))
+                      (setq w (cddr w))))
                   ;; Anything else with no waveform (operating-point parameters, noise
                   ;; contributions and pac sidebands as families, stb margins), but the
                   ;; netlist's own info results: named so the import reports it.
@@ -144,6 +154,44 @@
                     (fprintf port "# skipped %s %s\n" r o))))))
           (close port))))
     any))
+
+;; When the selected result r (but noise, whose families are per-device contributions) is a
+;; family over sidebands (live pac: famIsFamily, sweepValues -7 to 7), writes one "# analysis
+;; r" block per sideband with every output's waveform there (consecutive plots of the same
+;; signals are steps in Schemify, waves.md section 1) after a "# steps r <values>" line, and
+;; answers t; else nil, writing nothing.
+(procedure (SfyResSidebands port r)
+  (let ((outs (sort (mapcar (lambda (x) (SfyAtomStr x)) (car (errset (outputs)))) nil))
+        (w nil) (sbs nil) (fw nil) (kind nil) (x0 nil))
+    ;; The first output v() or i() answers (a terminal answers only i(), live).
+    (when (nequal r "noise")
+      (foreach o outs
+        (unless w (setq w (or (car (errset (v o))) (car (errset (i o))))))))
+    (when (and w (car (errset (famIsFamily w))))
+      (setq sbs (car (errset (sweepValues w)))))
+    ;; Every member on the sweep's own x (the member of sideband 0, else the first): a
+    ;; sideband's own x is its output frequency |k fund + f|, descending for k < 0 (live), so
+    ;; steps of one x keep the sweep's meaning.
+    (when sbs
+      (setq x0 (car (errset (drGetWaveformXVec
+                              (famValue w (or (car (setof sb sbs (equal sb 0))) (car sbs))))))))
+    (when (and sbs x0)
+      (fprintf port "# steps %s" r)
+      (foreach sb sbs (fprintf port " %s" (SfyAtomStr sb)))
+      (fprintf port "\n")
+      (foreach sb sbs
+        (fprintf port "# analysis %s\n" r)
+        (foreach o outs
+          (setq kind "V")
+          (setq w (car (errset (v o))))
+          (unless w
+            (setq kind "I")
+            (setq w (car (errset (i o)))))
+          (setq fw (and w (car (errset (famValue w sb)))))
+          (if (SfyResIsWave fw)
+            (SfyResWaveOn port o fw kind x0)
+            (fprintf port "# skipped %s %s\n" r o))))
+      t)))
 
 ;; Whether w is a waveform of numbers: its x and y vectors answer, and their first elements
 ;; are numbers (the primitives result's vectors hold strings, "model").
@@ -156,9 +204,16 @@
 (procedure (SfyResIsNum e)
   (or (numberp e) (complexp e)))
 
+;; SfyResWave with the x values of vector x (as long as w's).
+(procedure (SfyResWaveOn port name w kind x)
+  (SfyResWaveXY port name x (drGetWaveformYVec w) kind))
+
 ;; Prints waveform w of signal name: its header and every point at %.17g.
 (procedure (SfyResWave port name w kind)
-  (let ((x (drGetWaveformXVec w)) (y (drGetWaveformYVec w)) (n 0) (e nil))
+  (SfyResWaveXY port name (drGetWaveformXVec w) (drGetWaveformYVec w) kind))
+
+(procedure (SfyResWaveXY port name x y kind)
+  (let ((n 0) (e nil))
     (setq n (drVectorLength x))
     (fprintf port "# %s %d points %s\n" name n kind)
     (for k 0 (sub1 n)

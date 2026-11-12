@@ -50,6 +50,7 @@ code PA spectre
 code TH spice
   | .temp -40
   | .tran 1e-9 1u
+  | * ade output ti terminal: /R0/PLUS
 code TR spectre
   | temp options temp=-40
   | dc dc param=temp start=-40 stop=125 step=5
@@ -72,6 +73,7 @@ needs_review:config	tb	maestro test TR has no output: a Schemify run gives it ev
 needs_review:corner	tb	corner C1 model /pdk/m2.scs sections tt ss: a corner group; only tt comes back (Schemify has no corner group)
 needs_review:corner	tb	corner C1 var temperature -40,125: a corner group; only its first point -40 comes back (Schemify has no corner group)
 needs_review:output	tb	maestro test TH: output ymxa is evaluated over corners; Schemify evaluates every output per job
+needs_review:output	tb	output ti (terminal) `/R0/PLUS` has no calculator form
 needs_review:spec	tb	maestro test TH: spec of ymxa: ("tol" "0.1" "10%") has no Schemify spec (only > < and range)
 needs_review:sweep	tb	maestro test B1: temperature sweep -40,27,125: only its first point -40 comes back (Schemify has no temperature sweep)
 needs_review:sweep	tb	maestro test N1: temperature sweep -40,27,125: only its first point -40 comes back (Schemify has no temperature sweep)

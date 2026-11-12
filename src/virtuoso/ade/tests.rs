@@ -413,3 +413,20 @@ fn other_outputs_read_as_result() {
     assert!(out_from_ade_in("(bw * 2)", "T2", &own).is_none());
     assert!(out_from_ade("(vmax * 2)").is_none());
 }
+
+/// A test state's settings a Schemify run does not take are named (live a_probe2 fields).
+#[test]
+fn state_settings_are_reported() {
+    let st = "<field Name=\"includePath\" Type=\"string\">\"/tmp/inc\"</field>\n\
+              <field Name=\"stimulusFile\" Type=\"list\">nil</field>\n\
+              <field Name=\"save\" Type=\"string\">\"allpub\"</field>\n\
+              <field Name=\"turboSwitch\" Type=\"symbol\">t</field>\n\
+              <field Name=\"uniMode\" Type=\"string\">\"APS\"</field>\n";
+    let n = state_notes(st);
+    assert_eq!(n.len(), 2, "{n:?}");
+    assert!(
+        n[0].contains("APS mode") && n[1].contains("/tmp/inc"),
+        "{n:?}"
+    );
+    assert!(state_notes("<field Name=\"includePath\" Type=\"string\">\"\"</field>").is_empty());
+}

@@ -95,8 +95,52 @@ fn fresh(ctx: &Ctx<'_>, notes: &mut Notes) -> Fresh {
     if pending.iter().any(|p| !p.is_empty()) {
         remaster(ctx, &mut docs, &pending, notes);
     }
+    for (doc, _, _) in docs.iter_mut().flatten() {
+        if let Some(d) = one_ground(doc) {
+            *doc = d;
+        }
+    }
     check_connectivity(ctx, &docs, notes);
     Fresh { docs }
+}
+
+/// One ground per cellview: `gnd!` imports as `0` (Schemify's ground), but a label that
+/// carries its Schemify spelling (`schemifyNet`: an xschem bench's global `GND`, ngspice's
+/// ground alias) keeps it. When a cellview holds both, its `0` labels (re-mastering stubs,
+/// joins, unmarked labels of the same Virtuoso net) take that spelling, so the cellview
+/// has one ground net, not a `GND` floating beside `0` in Spectre (gaps round 2, lane A).
+/// `None` when nothing changes.
+fn one_ground(doc: &Document<'static>) -> Option<Document<'static>> {
+    let label = |r: u32| doc.record_kind(r) == RecordKind::Label;
+    let text = |r: u32| doc.field(r, 4).unwrap_or("");
+    let global = |r: u32| {
+        doc.find_attr(r, "global")
+            .is_some_and(|a| doc.attr_value(a, 0) == Some("true"))
+    };
+    let alias = (1..doc.record_count())
+        .find(|&r| label(r) && global(r) && text(r).eq_ignore_ascii_case("gnd"))
+        .map(|r| text(r).to_owned())?;
+    if !(1..doc.record_count()).any(|r| label(r) && text(r) == "0") {
+        return None;
+    }
+    let mut out = Document::new(doc.kind());
+    crate::design::copy_header(&mut out, doc, &[]);
+    for r in 1..doc.record_count() {
+        if !(label(r) && text(r) == "0") {
+            out.copy_record(doc, r);
+            continue;
+        }
+        out.begin_record(RecordKind::Label);
+        for (k, v) in doc.fields(r).enumerate() {
+            out.push_field(if k == 4 { alias.as_str() } else { v });
+        }
+        push_attr(&mut out, "global", &["true"]);
+        for a in doc.attrs(r) {
+            crate::design::copy_attr(&mut out, doc, a);
+        }
+    }
+    assert_eq!(out.record_count(), doc.record_count());
+    Some(out)
 }
 
 /// The project as an import leaves it: the existing files, every fresh document and a
