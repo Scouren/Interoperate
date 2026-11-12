@@ -5,18 +5,24 @@
 #   cd <your Virtuoso project directory>        # the one with cds.lib
 #   /path/to/Schemify-Interop/live/test.sh [run.sh flags, e.g. --lib sample]
 #
-# It deletes the previous work directory (default ./sfylive) and this user's /tmp/sfy_* files.
+# It deletes the previous work directory (default ./sfylive) and this user's /tmp/sfy_* files,
+# except with --step, which works on the previous run's.
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 work="$PWD/sfylive"
+step=""
 args=("$@")
 for ((i = 0; i < ${#args[@]}; i++)); do
   [[ ${args[i]} == --work ]] && work="${args[i + 1]:-$work}"
+  [[ ${args[i]} == --step ]] && step="${args[i + 1]:-}"
 done
 
-rm -rf "$work"
-rm -f /tmp/sfy_selftest* /tmp/sfy_probe.txt 2>/dev/null
+# One --step works on the previous run's work directory (verify grades it again).
+if [[ -z $step ]]; then
+  rm -rf "$work"
+  rm -f /tmp/sfy_selftest* /tmp/sfy_probe.txt 2>/dev/null
+fi
 
 "$here/run.sh" "$@" 2>&1 | tee "$PWD/sfylive-run.log"
 status=${PIPESTATUS[0]}
@@ -28,7 +34,10 @@ mkdir -p "$work"
   echo "== run.sh exit $status, flags: $*"
   echo
   echo "== report"
-  cat "$out/report.md" 2>/dev/null || echo "(no report: see sfylive-run.log)"
+  cat "$out/report.md" 2>/dev/null || {
+    echo "(no report: the last lines of sfylive-run.log)"
+    grep -v -E '^ *(Compiling|Finished|Running|Blocking) ' "$PWD/sfylive-run.log" | tail -20
+  }
   echo
   echo "== refusals and SKILL errors (count, line)"
   grep -h -e refused -e 'SKILL error' "$work"/in/*.log "$out"/*.sfyx.log 2>/dev/null \
