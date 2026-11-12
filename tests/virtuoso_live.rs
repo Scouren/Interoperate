@@ -1562,14 +1562,64 @@ fn check_exact_round_trip(r: &mut Report, work: &Path, name: &str, dir: &Path) {
     );
 }
 
-/// The `dialect` netlist's input of `cell` of a project against its snapshot
-/// (`common::frozen_input`), taken when the netlists before and after Virtuoso agreed.
-fn netlist_of(files: &BTreeMap<String, Vec<u8>>, cell: &str, dialect: &str) {
-    common::frozen_input(files, cell, dialect);
+/// The cells the analogLib round trip netlists: every bench, else every component.
+fn alib_tops(files: &BTreeMap<String, Vec<u8>>) -> Vec<&String> {
+    let tops: Vec<&String> = files.keys().filter(|p| p.ends_with(".shbench")).collect();
+    if !tops.is_empty() {
+        return tops;
+    }
+    files.keys().filter(|p| p.ends_with(".shcomp")).collect()
+}
+
+/// Why the `schemify` on PATH cannot netlist, or `None` when it can: `netlist` is a
+/// development build's command (a release refuses it as "not in this build").
+fn no_netlister() -> Option<String> {
+    match std::process::Command::new("schemify")
+        .arg("netlist")
+        .output()
+    {
+        Err(e) => Some(format!("no `schemify` command line on PATH ({e})")),
+        Ok(o) => {
+            let err = String::from_utf8_lossy(&o.stderr);
+            err.contains("not in this build")
+                .then(|| format!("the `schemify` on PATH cannot netlist: {}", err.trim()))
+        }
+    }
+}
+
+/// `files` written out as project `dir`, with a bare manifest when they have none: `schemify
+/// --project` needs one, and the nearest one above `dir` would be another project's.
+fn lay_out(dir: &Path, files: &BTreeMap<String, Vec<u8>>) {
+    let _ = std::fs::remove_dir_all(dir);
+    for (p, b) in files {
+        write(&dir.join(p), b);
+    }
+    if !files.contains_key("schemify.project") {
+        write(&dir.join("schemify.project"), "schemify 1 project\n");
+    }
+}
+
+/// The ngspice netlist of `cell` of project `dir` by `schemify netlist` (without the user's
+/// init.lua and packages).
+fn netlist_of(dir: &Path, cell: &str) -> Result<String, String> {
+    let o = std::process::Command::new("schemify")
+        .arg("--project")
+        .arg(dir)
+        .args(["--clean", "netlist", cell, "--dialect", "ngspice"])
+        .current_dir(dir)
+        .output()
+        .map_err(|e| format!("schemify: {e}"))?;
+    if !o.status.success() {
+        let err = String::from_utf8_lossy(&o.stderr);
+        let first = err.lines().next().unwrap_or("");
+        return Err(format!("schemify netlist {cell}: {}: {first}", o.status));
+    }
+    Ok(String::from_utf8_lossy(&o.stdout).into_owned())
 }
 
 /// The analogLib-mode round trip of one fixture project: every bench (else every
-/// component) netlists the same before and after Virtuoso.
+/// component) netlists the same before and after Virtuoso, by the `schemify` on PATH (SKIP
+/// when it has no netlister).
 fn check_alib_round_trip(r: &mut Report, work: &Path, name: &str, dir: &Path) {
     let map = lib_map(name, Mode::Alib, dir);
     let id = format!("roundtrip.{name}.alib");
@@ -1607,23 +1657,71 @@ fn check_alib_round_trip(r: &mut Report, work: &Path, name: &str, dir: &Path) {
             }
         }
     }
-    let before = read_tree(dir);
-    let after = read_tree(&proj);
-    let mut tops: Vec<&String> = before.keys().filter(|p| p.ends_with(".shbench")).collect();
-    if tops.is_empty() {
-        tops = before.keys().filter(|p| p.ends_with(".shcomp")).collect();
+    if let Some(why) = no_netlister() {
+        return r.add(id, Grade::Skip, format!("imported; not netlisted: {why}"));
     }
+    let before = read_tree(dir);
+    let (bdir, adir) = (
+        work.join(format!("projects/nl_{name}/before")),
+        work.join(format!("projects/nl_{name}/after")),
+    );
+    lay_out(&bdir, &before);
+    lay_out(&adir, &read_tree(&proj));
     let mut compared = 0;
-    for t in tops {
-        netlist_of(&before, t, "Ngspice");
-        netlist_of(&after, t, "Ngspice");
-        compared += 1;
+    for t in alib_tops(&before) {
+        let want = match netlist_of(&bdir, t) {
+            Ok(n) => n,
+            Err(e) => {
+                r.add(
+                    format!("{id}.{t}"),
+                    Grade::Info,
+                    format!("the original does not netlist: {e}"),
+                );
+                continue;
+            }
+        };
+        match netlist_of(&adir, t) {
+            Ok(got) if got == want => compared += 1,
+            Ok(got) => {
+                let lines = |s: &str| s.lines().map(str::to_owned).collect::<Vec<_>>();
+                let d = first_diff(&lines(&want), &lines(&got)).unwrap_or_default();
+                return r.add(
+                    id,
+                    Grade::Fail,
+                    format!("{t}: the ngspice netlist changed: {d}"),
+                );
+            }
+            Err(e) => return r.add(id, Grade::Fail, format!("{t} after Virtuoso: {e}")),
+        }
+    }
+    if compared == 0 {
+        return r.add(
+            id,
+            Grade::Skip,
+            "imported; no top of the original netlists (INFO rows)",
+        );
     }
     r.add(
         id,
         Grade::Pass,
-        format!("{compared} netlists equivalent after Virtuoso (analogLib masters)"),
+        format!(
+            "{compared} netlists identical after Virtuoso (analogLib masters, schemify netlist)"
+        ),
     );
+}
+
+/// The mock runs' oracle of the analogLib round trip, which runs without a netlister: the
+/// netlists' inputs on both sides against their snapshots (`common::frozen_input`), taken
+/// when the netlists before and after the mock agreed.
+fn freeze_alib_inputs(work: &Path, o: &Opts) {
+    for (name, dir) in all_projects(o) {
+        let before = read_tree(&dir);
+        let after = read_tree(&work.join(format!("projects/rta_{name}")));
+        for t in alib_tops(&before) {
+            common::frozen_input(&before, t, "Ngspice");
+            common::frozen_input(&after, t, "Ngspice");
+        }
+    }
 }
 
 /// Pin-pattern alignment against the analogLib this Virtuoso has (spec §6.4, §6.5): the
@@ -2515,6 +2613,7 @@ fn kit_passes_on_the_mock() {
     mid(&work, &o);
     run_on_mock(&mut i, &work, "session2.il");
     let r = verify(&work, &o);
+    freeze_alib_inputs(&work, &o);
     let fails: Vec<String> = r
         .fails()
         .iter()
@@ -2528,16 +2627,20 @@ fn kit_passes_on_the_mock() {
             "{id} passes now ({why}): remove it from KNOWN_BUGS"
         );
     }
-    let skipped: BTreeSet<&str> = r
+    let skipped: BTreeSet<String> = r
         .rows
         .iter()
         .filter(|x| x.1 == Grade::Skip)
-        .map(|x| x.0.as_str())
+        .map(|x| x.0.clone())
         .collect();
-    assert_eq!(
-        skipped,
-        ["callbacks", "netlist", "ocean", "pdk", "user"].into()
-    );
+    let mut want: BTreeSet<String> = ["callbacks", "netlist", "ocean", "pdk", "user"]
+        .map(String::from)
+        .into();
+    // The analogLib round trip netlists with a development build's `schemify` only.
+    if no_netlister().is_some() {
+        want.extend(PROJECTS.iter().map(|(n, _)| format!("roundtrip.{n}.alib")));
+    }
+    assert_eq!(skipped, want);
 }
 
 /// `--lib` on the mock: the fixture library `work` (cells drawn the Virtuoso way: bare pin
@@ -2565,6 +2668,7 @@ fn kit_lib_round_trip_on_the_mock() {
     mid(&work, &o);
     run_on_mock(&mut i, &work, "session2.il");
     let r = verify(&work, &o);
+    freeze_alib_inputs(&work, &o);
     let user: Vec<String> = r
         .rows
         .iter()
@@ -2687,6 +2791,7 @@ fn kit_pdk_refresh_on_the_mock() {
     mid(&work, &o);
     run_on_mock(&mut i, &work, "session2.il");
     let r = verify(&work, &o);
+    freeze_alib_inputs(&work, &o);
     let row = |id: &str| {
         r.rows
             .iter()
