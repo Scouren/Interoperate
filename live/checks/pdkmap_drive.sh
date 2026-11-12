@@ -21,7 +21,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$here/../.."
 host="${SFY_HOST:-}"
 [[ -n $host ]] || { echo "usage: SFY_HOST=<host> $0   (SFY_HOST: the Virtuoso host's ssh name)" >&2; exit 2; }
-work=sfytest/checks
+work="${SFYCHECK_ROOT:-sfytest}/checks"
 src=$work/src_pdkmap
 lib=sfyprobe_pdkmap
 tmp="${SFYCHECK_LOCAL:-$(mktemp -d)}"
@@ -48,7 +48,7 @@ DROP
 trap drop EXIT
 
 status=0
-ssh "$host" "env SFYCHECK_KEEP=1 SFYCHECK_IL=\$HOME/$work/schemify_pdkmap.il bash $src/run.sh pdkmap_names" >"$tmp/run.txt" 2>&1 || status=$?
+ssh "$host" "env SFYCHECK_WORK=\$HOME/$work SFYCHECK_KEEP=1 SFYCHECK_IL=\$HOME/$work/schemify_pdkmap.il bash $src/run.sh pdkmap_names" >"$tmp/run.txt" 2>&1 || status=$?
 cat "$tmp/run.txt"
 cat >"$tmp/want.sfyx" <<WANT
 ("sfyx" 1 "schemify.il 1")

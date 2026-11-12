@@ -18,7 +18,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$here/../.."
 host="${SFY_HOST:-}"
 [[ -n $host ]] || { echo "usage: SFY_HOST=<host> $0   (SFY_HOST: the Virtuoso host's ssh name)" >&2; exit 2; }
-work=sfytest/checks
+work="${SFYCHECK_ROOT:-sfytest}/checks"
 lib=sfyprobe_l2
 tmp="${SFYCHECK_LOCAL:-$(mktemp -d)}"
 mkdir -p "$tmp/il"
@@ -31,7 +31,7 @@ scp -q "$here"/*.il "$here"/run.sh "$host:$work/src/"
 scp -q "$repo/tests/fixtures/skill/cosm_kit.il" "$host:$work/src/l2_kit.il"
 scp -q "$tmp/il/schemify.il" "$host:$work/schemify.il"
 
-ssh "$host" "bash $work/src/run.sh l2_labels" >"$tmp/run.txt" 2>&1 &
+ssh "$host" "env SFYCHECK_WORK=\$HOME/$work bash $work/src/run.sh l2_labels" >"$tmp/run.txt" 2>&1 &
 run=$!
 for _ in $(seq 300); do
   ssh "$host" "test -s $work/out/l2_first.sfyx && grep -q '^(\"end\")' $work/out/l2_first.sfyx" && break

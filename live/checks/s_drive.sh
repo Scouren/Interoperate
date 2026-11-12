@@ -14,7 +14,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$here/../.."
 host="${SFY_HOST:-}"
 [[ -n $host ]] || { echo "usage: SFY_HOST=<host> $0" >&2; exit 2; }
-work=sfytest/checks-s
+work="${SFYCHECK_ROOT:-sfytest}/checks-s"
 lib=sfyprobe_s
 tmp="${SFYCHECK_LOCAL:-$(mktemp -d)}"
 mkdir -p "$tmp/il" "$tmp/si"
@@ -23,7 +23,7 @@ ${CARGO:-cargo} run -q --release --features cli --bin schemify-interop --manifes
   -- install-skill "$tmp/il" >/dev/null
 ssh "$host" bash -s <<PREP
 mkdir -p $work/src $work/out && rm -f $work/out/s_schematic* $work/out/s_more*
-[ -f $work/cds.lib ] || cp sfytest/checks/cds.lib $work/cds.lib
+[ -f $work/cds.lib ] || cp ${SFYCHECK_ROOT:-sfytest}/checks/cds.lib $work/cds.lib
 # The sheet borders (S5's multi-sheet schematic), beside analogLib's install.
 grep -q '^DEFINE US_8ths ' $work/cds.lib || sed -n 's|^DEFINE analogLib \(.*\)/artist/analogLib|DEFINE US_8ths \1/sheets/US_8ths|p' $work/cds.lib >> $work/cds.lib
 PREP
