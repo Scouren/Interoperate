@@ -299,9 +299,7 @@ fn only_the_ref_libraries_masters_leave_the_host() {
     assert!(
         out.stdout
             .contains("1 master(s) not dumped and not in this project or interop.map (pdk 1)")
-            && out
-                .stdout
-                .contains("`--ref analogLib --ref basic --ref pdk` dumps them"),
+            && out.stdout.contains("`--ref pdk` dumps them"),
         "{}",
         out.stdout
     );
@@ -310,7 +308,7 @@ fn only_the_ref_libraries_masters_leave_the_host() {
     assert!(amp.contains(" pdk:nch\n"), "{amp}");
     // With --ref pdk the master travels, with its record.
     let mut more = pull("p2").to_vec();
-    more.extend(["--ref", "analogLib", "--ref", "basic", "--ref", "pdk"]);
+    more.extend(["--ref", "pdk"]);
     let out = cli(&mut i, &dir, &more);
     ok(&out, "pull --ref pdk");
     let dump = std::fs::read_to_string(dir.join("p2/.schemify/virtuoso/work.sfyx")).unwrap();

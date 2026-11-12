@@ -93,6 +93,11 @@ pub(super) fn batch_script(
 pub(super) fn remote(cmd: &str, host: &str, script: &str) -> (u8, String) {
     use std::io::Write;
     use std::process::{Command, Stdio};
+    // A name ssh would read as an option (`-oProxyCommand=…`) is no host.
+    if host.starts_with('-') {
+        eprintln!("schemify-interop: {cmd}: no ssh host name: {host}");
+        return (2, String::new());
+    }
     let start = std::time::Instant::now();
     let child = Command::new("ssh")
         .args([host, "sh", "-s"])
@@ -146,8 +151,8 @@ pub(super) fn remote(cmd: &str, host: &str, script: &str) -> (u8, String) {
 
 /// `virtuoso-pull <project-dir> --host <h> --vlib <lib> ...`: `SfyExport` of `<lib>` (the
 /// `--cell`s, or every cell) on host `<h>`, then `virtuoso-import` of that dump, kept at
-/// `.schemify/virtuoso/<lib>.sfyx` beside its report. Only masters in the `--ref` libraries
-/// (default `analogLib` and `basic`) are dumped; each other master that resolves to no cell
+/// `.schemify/virtuoso/<lib>.sfyx` beside its report. Only masters in `analogLib`, `basic`
+/// and the `--ref` libraries are dumped; each other master that resolves to no cell
 /// here is a `needs_review:master` row, counted per library in the summary. 0 imported, 1
 /// refused (on the host or by the import), 2 usage, I/O or a failed session.
 pub(super) fn virtuoso_pull(args: &[String]) -> u8 {
@@ -158,8 +163,9 @@ pub(super) fn virtuoso_pull(args: &[String]) -> u8 {
     let Some((project, rest)) = args.split_first() else {
         return usage();
     };
+    // The libraries whose masters may leave the host: Cadence's own, and each `--ref`.
     let (mut host, mut vlib, mut cells, mut refs, mut maestro) =
-        (None, None, Vec::new(), Vec::new(), true);
+        (None, None, Vec::new(), vec!["analogLib", "basic"], true);
     // virtuoso-import's arguments: the dump's path goes in at 1 once the library is known.
     let mut import = vec![project.clone(), String::new()];
     let mut it = rest.iter();
@@ -172,6 +178,7 @@ pub(super) fn virtuoso_pull(args: &[String]) -> u8 {
                     "--host" => host = Some(v.as_str()),
                     "--vlib" => vlib = Some(v.as_str()),
                     "--cell" => cells.push(v.as_str()),
+                    _ if refs.contains(&v.as_str()) => {}
                     _ => refs.push(v.as_str()),
                 }
             }
@@ -181,9 +188,6 @@ pub(super) fn virtuoso_pull(args: &[String]) -> u8 {
     let (Some(host), Some(vlib)) = (host, vlib) else {
         return usage();
     };
-    if refs.is_empty() {
-        refs = vec!["analogLib", "basic"];
-    }
     import[1] = format!("{SCRATCH}/{vlib}.sfyx");
     let Some((root, job)) = job_command("virtuoso-import", &import) else {
         return usage();
@@ -230,11 +234,7 @@ pub(super) fn virtuoso_pull(args: &[String]) -> u8 {
     }
     if !missing.is_empty() {
         let libs: Vec<String> = missing.iter().map(|(l, n)| format!("{l} {n}")).collect();
-        let flags: Vec<String> = refs
-            .iter()
-            .chain(missing.keys())
-            .map(|l| format!("--ref {l}"))
-            .collect();
+        let flags: Vec<String> = missing.keys().map(|l| format!("--ref {l}")).collect();
         println!(
             "virtuoso-pull: {} master(s) not dumped and not in this project or interop.map ({}): their instances keep them as masters ({report}); `{}` dumps them",
             missing.values().sum::<usize>(),
