@@ -55,8 +55,11 @@ if scp -q "$host:$work/out/l9_first.sfyx" "$tmp/first.sfyx"; then
     "$([[ $(grep -c 'computed' "$amp") == 1 ]] && echo true || echo false)"
   verdict "the report says why the branching callback stays" \
     "$(grep -q 'param l: callback not carried: it branches' "$tmp/proj/first.report.md" && echo true || echo false)"
-  verdict "I0 carries vprop and vtd" \
-    "$([[ $(grep -c '^  v\(prop\|td\) ' "$top") -ge 6 ]] && echo true || echo false)"
+  # One line of each key per instance (a second is E024): the properties in triples, the
+  # three textDisplays eleven values each.
+  i0="$(sed -n '/^  name I0$/,/^[^ ]/p' "$top")"
+  verdict "I0 carries vprop and vtd (its three textDisplays)" \
+    "$([[ $(grep -c '^  vprop ' <<<"$i0") == 1 && $(grep '^  vtd ' <<<"$i0" | grep -o ' annotate drawing ' | wc -l) == 3 ]] && echo true || echo false)"
   # The redraw: I1 moved 40 units.
   sed -i 's/^  at 200 0 R270$/  at 240 0 R270/' "$top"
   "$bin" virtuoso-export "$tmp/proj" "${top#"$tmp/proj/"}" -o second.sfyx >"$tmp/export.txt"

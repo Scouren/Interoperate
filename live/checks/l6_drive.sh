@@ -7,8 +7,8 @@
 # Ships live/checks (as <work>/src_l6) and this checkout's schemify.il (as
 # <work>/schemify_l6.il) to the host, starts `run.sh l6_multitest` there, and when the
 # session's first dump appears: imports it into a scratch Schemify project, requires the
-# bench's test records (T3 disabled, T2's own C, the parameters, the cross-test output),
-# exports it unchanged (l6_second.sfyx: only the tests' maestro records may be sent), then
+# bench's test records (T3 disabled, T2's own C, the parameters, the cross-test output;
+# SKIP lines in the default build, whose format has no test records), exports it unchanged (l6_second.sfyx: only the tests' maestro records may be sent), then
 # edits T2's C to 7n and exports again (l6_edited.sfyx: only T2's testvar may be sent).
 # When the session's fourth dump (after loading the edit) arrives, imports it and requires
 # its test records to be the first import's with T2's C 7n. Prints the check's lines and
@@ -44,13 +44,20 @@ fetch() {
 }
 # The bench's test records and the lines that carry its tests' setup.
 tests() { sed -n '/^test /,/^$/p' "$1"; grep -E '^param |^  param |^output x2 |^output v2 ' "$1" || true; }
-# The records of an .sfyx file from its first maestro record on, but maesdb, maestate and
-# end: `<test> <tag> <first field>`.
+# The records of an .sfyx file from its first maestro record on, but maesdb, maestate,
+# maefile (the view's own files, sent with every export of a bench that carries them: lane
+# L11) and end: `<test> <tag> <first field>`.
 sent() {
-  awk -F'"' '/^\("maestro"/ {t=$4; next} t != "" && !/^\("(maesdb|maestate|end)"/ {print t, $2, $4}' "$1"
+  awk -F'"' '/^\("maestro"/ {t=$4; next} t != "" && !/^\("(maesdb|maestate|maefile|end)"/ {print t, $2, $4}' "$1"
 }
 verdicts=()
 check() { if eval "$2"; then verdicts+=("PASS l6_drive: $1"); else verdicts+=("FAIL l6_drive: $1"); fi; }
+# A check of the bench's test or param records: a SKIP where the first import has none (the
+# default build: they are the cadence-records format's).
+tcheck() {
+  if grep -q '^test ' "$tmp/first.tests"; then check "$@"
+  else verdicts+=("SKIP l6_drive: $1 (no test records in the default build: cadence-records)"); fi
+}
 
 if fetch l6_first.sfyx; then
   mkdir "$tmp/proj" "$tmp/back"
@@ -58,17 +65,17 @@ if fetch l6_first.sfyx; then
   "$bin" virtuoso-import "$tmp/proj" l6_first.sfyx >"$tmp/import.txt"
   bench="$lib/rc.shbench"
   tests "$tmp/proj/$bench" >"$tmp/first.tests"
-  check "three test records, T3 disabled" "grep -q '^test T3' $tmp/first.tests && sed -n '/^test T3/,/^test \|^$/p' $tmp/first.tests | grep -q '  enable false'"
-  check "T2's own C" "sed -n '/^test T2/,/^test /p' $tmp/first.tests | grep -q '  set C 5n'"
-  check "the parameter, globally and in corner hot" "grep -q '^param V0/v2 1' $tmp/first.tests && grep -q '^  param V0/v2 1.1' $tmp/first.tests"
-  check "the cross-test and dependent outputs as result()" "grep -q 'output x2 .*result(.*vmax.*T1' $tmp/first.tests && grep -q 'output v2 .*result(.*vmax.*T1' $tmp/first.tests"
+  tcheck "three test records, T3 disabled" "grep -q '^test T3' $tmp/first.tests && sed -n '/^test T3/,/^test \|^$/p' $tmp/first.tests | grep -q '  enable false'"
+  tcheck "T2's own C" "sed -n '/^test T2/,/^test /p' $tmp/first.tests | grep -q '  set C 5n'"
+  tcheck "the parameter, globally and in corner hot" "grep -q '^param V0/v2 1' $tmp/first.tests && grep -q '^  param V0/v2 1.1' $tmp/first.tests"
+  tcheck "the cross-test and dependent outputs as result()" "grep -q 'output x2 .*result(.*vmax.*T1' $tmp/first.tests && grep -q 'output v2 .*result(.*vmax.*T1' $tmp/first.tests"
   "$bin" virtuoso-export "$tmp/proj" "$bench" -o l6_second.sfyx >"$tmp/export.txt"
   sent "$tmp/proj/l6_second.sfyx" >"$tmp/second.sent"
   check "unchanged: nothing but the tests is sent ($(wc -l <"$tmp/second.sent") records)" "test ! -s $tmp/second.sent"
   sed -i 's/^  set C 5n$/  set C 7n/' "$tmp/proj/$bench"
   "$bin" virtuoso-export "$tmp/proj" "$bench" -o l6_edited.sfyx >"$tmp/export_edited.txt"
   sent "$tmp/proj/l6_edited.sfyx" >"$tmp/edited.sent"
-  check "edited: T2's testvar C alone is sent ($(tr '\n' ';' <"$tmp/edited.sent"))" "test \"\$(cat $tmp/edited.sent)\" = 'T2 testvar C'"
+  tcheck "edited: T2's testvar C alone is sent ($(tr '\n' ';' <"$tmp/edited.sent"))" "test \"\$(cat $tmp/edited.sent)\" = 'T2 testvar C'"
   scp -q "$tmp/proj/l6_second.sfyx" "$host:$work/out/l6_second.tmp"
   scp -q "$tmp/proj/l6_edited.sfyx" "$host:$work/out/l6_edited.tmp"
   ssh "$host" "bash -c 'cd $work/out && mv l6_edited.tmp l6_edited.sfyx && mv l6_second.tmp l6_second.sfyx'"

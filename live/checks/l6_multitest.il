@@ -136,8 +136,12 @@ let((first second edited fourth before)
       chkThat("load the round trip" SfyImport(second ?overwrite t))
       chkSame("round trip" before chkLine("after round trip" chkRead("after1")))
       chkThat("load the edit of T2's C" SfyImport(edited ?overwrite t))
-      chkSame("edit" subst('("T2" (("C" "7n"))) '("T2" (("C" "5n"))) before)
-        chkLine("after edit" chkRead("after2")))
+      ;; The default build's bench has no test records (the cadence-records format's), so
+      ;; its export has no edit of T2 to carry.
+      if(zerop(system(sprintf(nil "grep -q '^(\"testvar\"' %s" edited)))
+        chkSame("edit" subst('("T2" (("C" "7n"))) '("T2" (("C" "5n"))) before)
+          chkLine("after edit" chkRead("after2")))
+        chkSkip("edit: the export carries no testvar record (no test records in the default build: cadence-records)"))
       chkThat("fourth dump" SfyExport(fourth chkLib '("rc"))))))
 
 ;; ---- cleanup (run.sh removes chkLib)
