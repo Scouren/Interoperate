@@ -577,22 +577,19 @@ fn the_mock_getters_take_live_argument_shapes() {
 
 /// The live check's files (`live/checks/l1_mae_xml.il` copies them to its out directory):
 /// `SFY_L1_LIVE=<dir> cargo test --test mae_restore live_outputs -- --ignored`. The setup
-/// XML after each load equals the one before modulo `normalize`. The test states reach a
-/// fixed point after the first load: Maestro fills in defaults of a state it reads once
-/// (severities `"None"`, an output's `uniqueName`, a `devCheckingSetup` component, an
-/// `allcap` info option, live ICADVM20.1), and every later restore gives the same states.
+/// XML after each load equals the one before modulo `normalize`. The unchanged bench goes
+/// back as the view's own files (lane L11), so the test states after the first two loads
+/// are the view's; the edit goes through a session, which fills in defaults of a state it
+/// reads once (severities `"None"`, an output's `uniqueName`, a `devCheckingSetup`
+/// component, an `allcap` info option, live ICADVM20.1): its states have the same tests.
 #[test]
 #[ignore]
 fn live_outputs_compare_modulo_normalisation() {
     let dir = std::path::PathBuf::from(std::env::var("SFY_L1_LIVE").expect("SFY_L1_LIVE"));
     let read = |f: &str| std::fs::read_to_string(dir.join(f)).unwrap();
     let before = normalized(&read("l1_before.sdb"));
-    let first = mae_xml::state_tests(&read("l1_after1.state")).unwrap();
+    let states = mae_xml::state_tests(&read("l1_before.state")).unwrap();
     let names = |v: &[(String, String)]| v.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
-    assert_eq!(
-        names(&first),
-        names(&mae_xml::state_tests(&read("l1_before.state")).unwrap())
-    );
     for k in 1..=3 {
         let mut after = normalized(&read(&format!("l1_after{k}.sdb")));
         if k == 3 {
@@ -600,6 +597,10 @@ fn live_outputs_compare_modulo_normalisation() {
         }
         assert_eq!(after, before, "after{k}.sdb");
         let now = mae_xml::state_tests(&read(&format!("l1_after{k}.state"))).unwrap();
-        assert_eq!(now, first, "after{k}.state");
+        if k < 3 {
+            assert_eq!(now, states, "after{k}.state");
+        } else {
+            assert_eq!(names(&now), names(&states), "after{k}.state");
+        }
     }
 }
