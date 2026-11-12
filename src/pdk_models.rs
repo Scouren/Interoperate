@@ -4,9 +4,12 @@
 //! read order; PDK-Manager writes the dialect a simulator wants from them on demand.
 //!
 //! ```text
-//! pdk-models --root <dir> --entry <relpath>... --from <d> --to <d> -o <outdir>
-//!   d: spice (ngspice) | hspice | spectre | vacask | xyce
+//! pdk-models [--host <ssh name>] --root <dir> --entry <relpath>... --from <d> --to <d> -o <outdir>
+//!   d: ngspice (or spice) | espice | xyce | ltspice | hspice | spectre | vacask
 //! ```
+//!
+//! A dialect's name is SpiceRack's, which is the name of the Schemify simulator that reads
+//! it: `--to` takes the selected simulator (`schemify run`'s) as it is.
 //!
 //! Every file the entries reach (`--entry` repeats: a kit with a file per corner; includes,
 //! `.lib` calls and `include … section=`, at the top, in sections, subcircuits and branches)
@@ -28,7 +31,8 @@
 //! (`R0007`, also printed as `<relpath>: outside the root, refused`). Usage errors print the
 //! usage and exit 2.
 //!
-//! Remote kits never come here: they stay where they are (pdk-scan serves their interface).
+//! A remote kit never comes here: `--host` (`src/cli/pdk_models.rs`) converts it where it
+//! is, with the `schemify-interop` there.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -40,22 +44,38 @@ use spicerack::syntax::resolve::{FileId, Form, Kit, LoadError, Role};
 
 use crate::spice;
 
-const USAGE: &str = "usage: schemify-interop pdk-models --root <dir> --entry <relpath>... \
-     --from <d> --to <d> -o <outdir>   (d: spice | hspice | spectre | vacask | xyce)";
+const USAGE: &str = "usage: schemify-interop pdk-models [--host <ssh name>] --root <dir> \
+     --entry <relpath>... --from <d> --to <d> -o <outdir>   \
+     (d: ngspice | spice | espice | xyce | ltspice | hspice | spectre | vacask)";
 
+/// The model dialect `name` selects: SpiceRack's name for it, `spice` for ngspice. No kit
+/// has CDL or Verilog models.
 fn dialect(name: &str) -> Result<Dialect, String> {
-    Ok(match name {
-        "spice" | "ngspice" => Dialect::Ngspice,
-        "hspice" => Dialect::Hspice,
-        "spectre" => Dialect::Spectre,
-        "vacask" => Dialect::Vacask,
-        "xyce" => Dialect::Xyce,
-        d => return Err(format!("unknown dialect {d}\n{USAGE}")),
-    })
+    let d = match name {
+        "spice" => Some(Dialect::Ngspice),
+        n => Dialect::from_backend_name(n),
+    };
+    d.filter(|d| !matches!(d, Dialect::Cdl | Dialect::Verilog))
+        .ok_or_else(|| format!("unknown dialect {name}\n{USAGE}"))
 }
 
-/// Runs `pdk-models` on `args` (after the subcommand): stdout's text and the exit status.
-pub fn run(args: &[String]) -> (String, u8) {
+/// What `pdk-models` was asked for: the paths as given.
+pub struct Request<'a> {
+    /// `--root`: the directory that holds every file of the kit.
+    pub root: &'a str,
+    /// `--entry`, each relative to the root.
+    pub entries: Vec<&'a str>,
+    /// `--from`: the kit's dialect.
+    pub from: Dialect,
+    /// `--to`: the dialect to write.
+    pub to: Dialect,
+    /// `-o`: where the converted tree goes.
+    pub out: &'a str,
+}
+
+/// Reads `args` (after the subcommand); the usage or the unknown dialect, and status 2,
+/// when they do not make a request.
+pub fn request(args: &[String]) -> Result<Request<'_>, (String, u8)> {
     let mut opt = BTreeMap::new();
     let mut entries = Vec::new();
     let mut it = args.iter();
@@ -65,26 +85,48 @@ pub fn run(args: &[String]) -> (String, u8) {
             (k @ ("--root" | "--from" | "--to" | "-o"), Some(v)) => {
                 opt.insert(k, v.as_str());
             }
-            _ => return (format!("{USAGE}\n"), 2),
+            _ => return Err((format!("{USAGE}\n"), 2)),
         }
     }
     let [Some(root), Some(from), Some(to), Some(out)] =
         ["--root", "--from", "--to", "-o"].map(|k| opt.get(k).copied())
     else {
-        return (format!("{USAGE}\n"), 2);
+        return Err((format!("{USAGE}\n"), 2));
     };
     if entries.is_empty() {
-        return (format!("{USAGE}\n"), 2);
+        return Err((format!("{USAGE}\n"), 2));
     }
     let (from, to) = match (dialect(from), dialect(to)) {
         (Ok(f), Ok(t)) => (f, t),
-        (Err(e), _) | (_, Err(e)) => return (format!("{e}\n"), 2),
+        (Err(e), _) | (_, Err(e)) => return Err((format!("{e}\n"), 2)),
     };
-    let Ok(root) = std::fs::canonicalize(root).map(|r| spice::normalize(&r)) else {
-        return (format!("cannot open root {root}\n"), 2);
+    // The kit is read as text of its family (ESPice reads ngspice decks).
+    if spicerack::syntax::lexicon::of(from.family()).is_none() {
+        return Err((
+            format!("no reader for --from {}\n{USAGE}\n", from.name()),
+            2,
+        ));
+    }
+    Ok(Request {
+        root,
+        entries,
+        from,
+        to,
+        out,
+    })
+}
+
+/// Runs `pdk-models` on `args` (after the subcommand): stdout's text and the exit status.
+pub fn run(args: &[String]) -> (String, u8) {
+    let r = match request(args) {
+        Ok(r) => r,
+        Err(e) => return e,
     };
-    let entries: Vec<PathBuf> = entries.iter().map(|e| root.join(e)).collect();
-    convert(&root, &entries, from, to, Path::new(out))
+    let Ok(root) = std::fs::canonicalize(r.root).map(|p| spice::normalize(&p)) else {
+        return (format!("cannot open root {}\n", r.root), 2);
+    };
+    let entries: Vec<PathBuf> = r.entries.iter().map(|e| root.join(e)).collect();
+    convert(&root, &entries, r.from.family(), r.to, Path::new(r.out))
 }
 
 /// Converts every file the `entries` reach under `root` into `out`: the report and the exit
