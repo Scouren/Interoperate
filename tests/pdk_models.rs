@@ -202,7 +202,78 @@ fn bad_arguments_are_refused() {
     let kit = PathBuf::from(FIXTURES).join("spectre");
     let out_dir = scratch("bad");
     assert_eq!(run(&kit, "top.scs", "spectre", "eldo", &out_dir).1, 2);
+    assert_eq!(run(&kit, "top.scs", "spectre", "cdl", &out_dir).1, 2);
     assert_eq!(run(&kit, "top.scs", "rack", "spectre", &out_dir).1, 2);
     assert_eq!(pdk_models::run(&["--root".into()]).1, 2);
     assert!(!out_dir.exists());
+}
+
+/// The made-up kit written out, and `pdk-models --host kithost … --from spectre --to <to>`
+/// on it through a fake `ssh` that runs the remote command here, the host's
+/// `schemify-interop` (`SFY_INTEROP`) being this build's: stdout and the exit status.
+#[cfg(unix)] // the fake is an sh script
+fn on_host(name: &str, to: &str) -> (PathBuf, PathBuf, String, Option<i32>) {
+    use std::os::unix::fs::PermissionsExt;
+    let (kit, out, bin) = (
+        scratch(&format!("{name}-kit")),
+        scratch(&format!("{name}-out")),
+        scratch(&format!("{name}-bin")),
+    );
+    std::fs::create_dir_all(&kit).unwrap();
+    for (rel, text) in KIT {
+        std::fs::write(kit.join(rel), text).unwrap();
+    }
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(bin.join("ssh"), "#!/bin/sh\nshift\nexec \"$@\"\n").unwrap();
+    std::fs::set_permissions(bin.join("ssh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let cli = env!("CARGO_BIN_EXE_schemify-interop");
+    let o = std::process::Command::new(cli)
+        .args(["pdk-models", "--host", "kithost", "--root"])
+        .arg(&kit)
+        .args(["--entry", "top.scs", "--from", "spectre", "--to", to, "-o"])
+        .arg(&out)
+        .env(
+            "PATH",
+            format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+        )
+        .env("SFY_INTEROP", cli)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&bin);
+    (
+        kit,
+        out,
+        String::from_utf8(o.stdout).unwrap(),
+        o.status.code(),
+    )
+}
+
+#[test]
+#[cfg(unix)]
+fn a_remote_kit_is_converted_on_its_host_for_the_selected_simulator() {
+    // A Schemify simulator's name is the dialect: the tree is written there, and `models`
+    // names the file `set PDK_MODELS` takes.
+    let (kit, out, text, code) = on_host("host", "ngspice");
+    let want = format!(
+        "converted 5 file(s)\nmodels {}/top.scs\nend\n",
+        out.display()
+    );
+    assert_eq!((text.as_str(), code), (want.as_str(), Some(0)));
+    assert!(read(&out, "devices.scs").contains(".subckt nfet_lvt"));
+    for d in [kit, out] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn a_remote_kit_in_the_simulators_dialect_is_used_where_it_is() {
+    let (kit, out, text, code) = on_host("same", "spectre");
+    let want = format!(
+        "converted 0 file(s)\nmodels {}/top.scs\nend\n",
+        kit.display()
+    );
+    assert_eq!((text.as_str(), code), (want.as_str(), Some(0)));
+    assert!(!out.exists());
+    let _ = std::fs::remove_dir_all(kit);
 }

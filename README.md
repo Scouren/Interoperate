@@ -78,7 +78,7 @@ schemify-interop layout-export   <project> <bundle-dir>                  (layout
 schemify-interop layout-import   <project> <lib>/<cell>[/<view>] -o <bundle-dir>
 schemify-interop pdk-scan        [--stdin] --root <dir> --entry <file> --dialect spice|hspice|spectre [--section S] [--lib L] | --remote-script | --protocol   (PDK scan below)
 schemify-interop pdk-map         --scan <dir> (--dump <cdfnames.sfyx> | --host <ssh name> --vlib <lib>...) [--lib <name>] -o interop.map | --remote-script --vlib <lib>...   (PDK map below)
-schemify-interop pdk-models      --root <dir> --entry <relpath>... --from <d> --to <d> -o <outdir>   (d: spice|hspice|spectre|vacask|xyce; PDK models below)
+schemify-interop pdk-models      [--host <ssh name>] --root <dir> --entry <relpath>... --from <d> --to <d> -o <outdir>   (d: ngspice|espice|xyce|ltspice|hspice|spectre|vacask; PDK models below)
 schemify-interop ciel            <args>...      (ciel from PATH, else a private venv pinned to ciel 3.2.0 under Schemify's data directory, <data>/tools/ciel-3.2.0; needs python3; install output on stderr, ciel's exit status)
 ```
 
@@ -348,12 +348,33 @@ dump), the command fails with the reason and these variable names; the session l
 any, stays on the host and only its path is printed. The script's temporary directory is
 removed otherwise.
 
-### PDK models (local kits)
+### PDK models
 
 `schemify-interop pdk-models --root <dir> --entry <relpath>... --from <d> --to <d> -o <outdir>`
 converts each model file a kit reaches into another dialect at the same relative path,
 reporting losses by SpiceRack diagnostic code (`diag <relpath> <code> <count>`, never the
 cards). The root must contain every file the kit includes (sky130: `--root sky130A`).
+
+A dialect is named as the Schemify simulator that reads it (`ngspice`, `espice`, `xyce`,
+`ltspice`, `spectre`; also `hspice`, `vacask`, and `spice` for ngspice), so `--to` takes the
+simulator the project runs with.
+
+A kit that must stay on its host is converted there. With `--host <ssh name>` the
+`schemify-interop` on that host does the conversion (one ssh; `SFY_INTEROP` names the
+command there when it is not on the login `PATH` or in `~/.local/bin`), `--root` and `-o`
+are directories on the host, and only the report comes back:
+
+```
+$ schemify-interop pdk-models --host pdkhost --root /proj/pdk/myPdk/models --entry top.scs \
+      --from spectre --to ngspice -o /home/me/.cache/schemify/myPdk/ngspice
+converted 41 file(s)
+models /home/me/.cache/schemify/myPdk/ngspice/top.scs
+end
+```
+
+Each `models` line is a converted entry on the host: the path `set PDK_MODELS` takes in a
+project whose runs go to that host (`host` in its tech map). When the simulator reads the
+kit's own dialect nothing is copied and no ssh runs: the `models` lines name the kit's files.
 
 ## What does not cross
 
@@ -364,6 +385,10 @@ Every conversion lists its losses in the report. The main ones:
   byte for byte. Lost after you edit one in Schemify: views with no Schemify impl, duplicate
   views and comments. Not carried at all: a config view on a cell that is not a bench,
   `prop.cfg`, and the library names inside the text when `SfyImport ?lib` renames a library.
+- An instance a script made with `dbCreateInst` holds none of the defaults its master's CDF
+  stores on every instance (`storeDefault`). The loader places instances as the schematic
+  editor does, so that one comes back with those defaults stored: the same values, more
+  properties. An instance placed in the editor has them already and comes back unchanged.
 - Maestro setups now round-trip in full: the view's own setup rides in the bench, and a
   re-export updates the tests in place with only what you changed, instead of recreating
   them.
