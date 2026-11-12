@@ -156,7 +156,8 @@ procedure(chkCliRun(label args)
     st == 0))
 
 ;; The tags of the records of an .sfyx file from its maestro record on, but maesdb,
-;; maestate and end.
+;; maestate, end and maefile (the view's own files, which go back with every export of a
+;; bench that carries them: lane L11, spec 9.11).
 procedure(chkSent(path)
   let((p line out on tag)
     p = infile(path)
@@ -164,7 +165,7 @@ procedure(chkSent(path)
       while(gets(line p)
         tag = car(parseString(line "(\" "))
         when(tag == "maestro" on = t)
-        when(on && !member(tag '("maesdb" "maestate" "end"))
+        when(on && !member(tag '("maesdb" "maestate" "maefile" "end"))
           out = cons(substring(line 1 min(60 strlen(line))) out)))
       close(p))
     reverse(out)))
