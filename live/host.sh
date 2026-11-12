@@ -10,6 +10,12 @@
 #                                              --cdslib ~/sfytest/cds.lib --env ~/sfytest/env.csh
 #   SFY_HOST=<host> live/host.sh check <name>  live/checks/run.sh <name> with the installed CLI,
 #                                              its work directory ~/sfytest/head/checks
+#   SFY_HOST=<host> live/host.sh drive <file>  a driver (live/checks/*_drive.sh, a_ocn.sh) run on
+#                                              the host itself, ssh and scp local commands there
+#
+# drive: a driver polls the Virtuoso session over a second ssh while its first holds the
+# session; run there, it needs one. Its work directories are under ~/sfytest/head
+# (SFYCHECK_ROOT), its files in ~/sfytest/head/drive/<driver>; CARGO is cargo (no nix there).
 #
 # One ssh at a time: each subcommand holds a local lock for its whole run and exits 2 when
 # another holds it. The host's login shell is csh, so the remote half is a script on the
@@ -30,7 +36,7 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
 host="${SFY_HOST:-}"
-[[ -n $host ]] || { echo "usage: SFY_HOST=<host> $0 sync | build | kit [flags…] | check <name>" >&2; exit 2; }
+[[ -n $host ]] || { echo "usage: SFY_HOST=<host> $0 sync | build | kit [flags…] | check <name> | drive <file>" >&2; exit 2; }
 lock="${XDG_RUNTIME_DIR:-/tmp}/sfy-host.lock"
 exec 9>"$lock"
 flock -n 9 || { echo "host.sh: $lock is held: another host.sh is talking to $host" >&2; exit 2; }
@@ -124,5 +130,40 @@ schemify-interop install-skill "\$w" > /dev/null
 SFYCHECK_WORK="\$w" SFYCHECK_CLI="\$HOME/.local/bin/schemify-interop" nice -n 19 bash src/live/checks/run.sh $(printf '%q' "$2")
 EOF
     ;;
-  *) echo "usage: SFY_HOST=<host> $0 sync | build | kit [flags…] | check <name>" >&2; exit 2 ;;
+  drive)
+    [[ -n ${2:-} && -f $here/checks/$2 ]] || { echo "usage: SFY_HOST=<host> $0 drive <live/checks file>" >&2; exit 2; }
+    { printf '%s\ndrv=%q\n' "$calm" "$2"; cat <<'EOF'
+d="$HOME/sfytest/head/drive"
+rm -rf "${d:?}/${drv%.sh}"; mkdir -p "$d/bin" "$d/${drv%.sh}" checks
+[ -f checks/cds.lib ] || cp "$HOME/sfytest/cds.lib" checks/cds.lib
+# ssh [options] <host> [command]: the command here, from $HOME.
+cat > "$d/bin/ssh" <<'S'
+#!/usr/bin/env bash
+while [[ ${1:-} == -* ]]; do case $1 in -[bcDEeFIiJLlmOopQRSWw]) shift ;; esac; shift; done
+shift
+cd "$HOME" || exit 255
+if (($#)); then exec bash -c "$*"; else exec bash -s; fi
+S
+# scp [options] <from>… <to>: cp -r, a `host:path` under $HOME and globbed as there.
+cat > "$d/bin/scp" <<'S'
+#!/usr/bin/env bash
+a=()
+for x in "$@"; do
+  case $x in
+    -*) ;;
+    *:*) p=${x#*:}; [[ $p == /* ]] || p=$HOME/$p; a+=($p) ;;
+    *) a+=("$x") ;;
+  esac
+done
+exec cp -r "${a[@]}"
+S
+chmod +x "$d/bin/ssh" "$d/bin/scp"
+cd src
+PATH="$d/bin:$PATH" SFY_HOST=localhost SFYCHECK_ROOT=sfytest/head SFYCHECK_WORK="$HOME/sfytest/head/checks" \
+  SFYCHECK_LOCAL="$d/${drv%.sh}" CARGO_TARGET_DIR="$HOME/sfytest/head/target" CARGO=cargo \
+  nice -n 19 bash "live/checks/$drv"
+EOF
+    } | remote
+    ;;
+  *) echo "usage: SFY_HOST=<host> $0 sync | build | kit [flags…] | check <name> | drive <file>" >&2; exit 2 ;;
 esac

@@ -17,7 +17,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 host="${SFY_HOST:-}"
 [[ -n $host ]] || { echo "usage: SFY_HOST=<host> $0" >&2; exit 2; }
-work="${SFYCHECK_REMOTE:-sfytest/checks-a}"
+work="${SFYCHECK_REMOTE:-${SFYCHECK_ROOT:-sfytest}/checks-a}"
 tmp="${SFYCHECK_LOCAL:-$(mktemp -d)}"
 mkdir -p "$tmp/il" "$tmp/proj" "$tmp/nl"
 
@@ -26,7 +26,7 @@ bin="${CARGO_TARGET_DIR:-$repo/target}/release/schemify-interop"
 "$bin" install-skill "$tmp/il" >/dev/null
 cp "$repo"/tests/fixtures/live/a_ade/* "$tmp/proj/"
 "$bin" virtuoso-export "$tmp/proj" a_tb.shbench -o a_in.sfyx >"$tmp/export.txt"
-ssh "$host" "bash -c 'mkdir -p $work/src $work/out/a_in $work/out/a_nl && rm -rf $work/out/a_dump.sfyx $work/out/a_nl/*'"
+ssh "$host" "bash -c 'mkdir -p $work/src $work/out/a_in $work/out/a_nl && rm -rf $work/out/a_dump.sfyx $work/out/a_nl/*; [ -f $work/cds.lib ] || cp ${SFYCHECK_ROOT:-sfytest}/checks/cds.lib $work/cds.lib'"
 scp -q "$here"/*.il "$here"/run.sh "$host:$work/src/"
 scp -q "$tmp/il/schemify.il" "$host:$work/schemify.il"
 scp -q "$tmp/proj/a_in.sfyx" "$host:$work/out/a_in.sfyx"

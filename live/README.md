@@ -96,6 +96,7 @@ SFY_HOST=<host> live/host.sh sync          # HEAD (committed files only) to ~/sf
 SFY_HOST=<host> live/host.sh build         # schemify-interop into the host's ~/.local/bin
 SFY_HOST=<host> live/host.sh kit [flags]   # test.sh there; report.md and summary.txt come back
 SFY_HOST=<host> live/host.sh check <name>  # checks/run.sh <name>
+SFY_HOST=<host> live/host.sh drive <file>  # a checks/ driver run on the host itself: one ssh
 ```
 
 `sync` also ships the dependencies vendored here and a `.cargo/config.toml` for the host copy

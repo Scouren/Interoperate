@@ -14,27 +14,29 @@
 # primitive stop at their symbol, as the kit has no spectre view) under the run lock, runs the
 # `verify` step on the session's SfyExport dump and si's netlist, and deletes the library.
 # Exit 1 on any FAIL. Files stay in $SFYCHECK_LOCAL (default a fresh temporary directory).
+# CARGO: the cargo command, words split (default `nix develop -c cargo`, for real xschem;
+# without it, the `verify` step can run again where there is one, on $SFYCHECK_LOCAL).
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 host="${SFY_HOST:-}"
 [[ -n $host ]] || { echo "usage: SFY_HOST=<host> $0   (SFY_HOST: the Virtuoso host's ssh name)" >&2; exit 2; }
-work=sfytest/checks-x
+work="${SFYCHECK_ROOT:-sfytest}/checks-x"
 src=$work/src
 lib=sfyprobe_x
 tmp="${SFYCHECK_LOCAL:-$(mktemp -d)}"
 mkdir -p "$tmp/il"
 step() { # prepare | verify
   (cd "$repo" && SCHEMIFY_XS2V_DIR="$tmp" SCHEMIFY_XS2V_STEP="$1" SCHEMIFY_XS2V_LIB="$lib" \
-    nix develop -c cargo test -q --features cli --test xschem_virtuoso live_xs2v -- \
+    ${CARGO:-nix develop -c cargo} test -q --features cli --test xschem_virtuoso live_xs2v -- \
       --ignored --exact --nocapture)
 }
 
-(cd "$repo" && nix develop -c cargo build -q --features cli --bin schemify-interop)
+(cd "$repo" && ${CARGO:-nix develop -c cargo} build -q --features cli --bin schemify-interop)
 "${CARGO_TARGET_DIR:-$repo/target}/debug/schemify-interop" install-skill "$tmp/il" >/dev/null
 ssh "$host" bash -s <<SETUP
 mkdir -p $src $work/out
-[ -f $work/cds.lib ] || grep -v '^DEFINE sfyprobe_' sfytest/checks/cds.lib > $work/cds.lib
+[ -f $work/cds.lib ] || grep -v '^DEFINE sfyprobe_' ${SFYCHECK_ROOT:-sfytest}/checks/cds.lib > $work/cds.lib
 find $work/out -name 'x_xs2v*' -delete
 SETUP
 scp -q "$here"/*.il "$here"/run.sh "$host:$src/"

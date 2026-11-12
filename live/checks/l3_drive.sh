@@ -18,7 +18,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$here/../.."
 host="${SFY_HOST:-}"
 [[ -n $host ]] || { echo "usage: SFY_HOST=<host> $0   (SFY_HOST: the Virtuoso host's ssh name)" >&2; exit 2; }
-work=sfytest/checks
+work="${SFYCHECK_ROOT:-sfytest}/checks"
 lib=sfyprobe_l3
 tmp="${SFYCHECK_LOCAL:-$(mktemp -d)}"
 mkdir -p "$tmp/il"
@@ -30,7 +30,7 @@ ssh "$host" "bash -c 'mkdir -p $work/src_l3 $work/out && rm -f $work/out/l3_*'"
 scp -q "$here"/*.il "$here"/run.sh "$host:$work/src_l3/"
 scp -q "$tmp/il/schemify.il" "$host:$work/schemify_l3.il"
 
-ssh "$host" "bash -c 'SFYCHECK_IL=\$HOME/$work/schemify_l3.il bash $work/src_l3/run.sh l3_config'" >"$tmp/run.txt" 2>&1 &
+ssh "$host" "bash -c 'SFYCHECK_WORK=\$HOME/$work SFYCHECK_IL=\$HOME/$work/schemify_l3.il bash $work/src_l3/run.sh l3_config'" >"$tmp/run.txt" 2>&1 &
 run=$!
 # Waits for a complete dump on the host and copies it here.
 fetch() {

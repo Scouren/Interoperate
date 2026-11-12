@@ -1599,13 +1599,13 @@ fn lay_out(dir: &Path, files: &BTreeMap<String, Vec<u8>>) {
     }
 }
 
-/// The ngspice netlist of `cell` of project `dir` by `schemify netlist` (without the user's
-/// init.lua and packages).
-fn netlist_of(dir: &Path, cell: &str) -> Result<String, String> {
+/// The `dialect` netlist of `cell` of project `dir` by `schemify netlist` (without the
+/// user's init.lua and packages).
+fn netlist_of(dir: &Path, cell: &str, dialect: &str) -> Result<String, String> {
     let o = std::process::Command::new("schemify")
         .arg("--project")
         .arg(dir)
-        .args(["--clean", "netlist", cell, "--dialect", "ngspice"])
+        .args(["--clean", "netlist", cell, "--dialect", dialect])
         .current_dir(dir)
         .output()
         .map_err(|e| format!("schemify: {e}"))?;
@@ -1669,7 +1669,7 @@ fn check_alib_round_trip(r: &mut Report, work: &Path, name: &str, dir: &Path) {
     lay_out(&adir, &read_tree(&proj));
     let mut compared = 0;
     for t in alib_tops(&before) {
-        let want = match netlist_of(&bdir, t) {
+        let want = match netlist_of(&bdir, t, "ngspice") {
             Ok(n) => n,
             Err(e) => {
                 r.add(
@@ -1680,7 +1680,7 @@ fn check_alib_round_trip(r: &mut Report, work: &Path, name: &str, dir: &Path) {
                 continue;
             }
         };
-        match netlist_of(&adir, t) {
+        match netlist_of(&adir, t, "ngspice") {
             Ok(got) if got == want => compared += 1,
             Ok(got) => {
                 let lines = |s: &str| s.lines().map(str::to_owned).collect::<Vec<_>>();
@@ -2454,8 +2454,8 @@ fn a_cell_past_the_param_table_imports_and_loads() {
 /// into a fresh project (`<dump>.proj`): `SFY_A_DUMP` the `.sfyx` (absolute), `SFY_A_CELL`
 /// the bench file it gives, `SFY_A_OUT` a directory that gets `<test>.scs` per `test`
 /// record, the bench with only that test's code blocks (Schemify runs have no test
-/// dimension yet, run.md §2). Run by `live/checks/a_drive.sh`, which runs Spectre on them
-/// on the Virtuoso host.
+/// dimension yet, run.md §2), netlisted by the `schemify` on PATH (`<test>.err` when it
+/// cannot). Run by `live/checks/a_drive.sh`, which runs Spectre on them on the Virtuoso host.
 #[test]
 #[ignore = "run by live/checks/a_drive.sh"]
 fn a_dump_netlist() {
@@ -2507,13 +2507,13 @@ fn a_dump_netlist() {
             .collect();
         let mut files = read_tree(&proj);
         files.insert(cell.clone(), text.into_bytes());
-        // Netlisting it (`<t>.scs`) needs a Schemify development build: Schemify's public
-        // interface has no netlister.
-        write(&out.join(format!("{t}.shbench")), &files[&cell]);
-        write(
-            &out.join(format!("{t}.err")),
-            "no netlister in Schemify's public interface: netlist the .shbench beside this",
-        );
+        // The `schemify` on PATH netlists it (a development build's `netlist`).
+        let dir = proj.with_extension(format!("nl.{t}"));
+        lay_out(&dir, &files);
+        match netlist_of(&dir, &cell, "spectre") {
+            Ok(nl) => write(&out.join(format!("{t}.scs")), nl),
+            Err(e) => write(&out.join(format!("{t}.err")), e),
+        }
     }
 }
 
