@@ -20,7 +20,7 @@ use std::borrow::Cow;
 
 use schemify_format::{Document, FileKind};
 
-use super::super::adel::{b64_decode, b64_encode, bench_path, fingerprint};
+use super::super::adel::{b64_decode, b64_encode, bench_path, fingerprint, written_bench};
 use super::super::{Import, ImportOptions};
 use crate::design::{Cell, Files, copy_header};
 use crate::notes::Notes;
@@ -132,10 +132,9 @@ pub fn attach(views: &[View], imp: &mut Import, existing: &Files, opts: &ImportO
             );
             continue;
         };
-        let doc = std::str::from_utf8(&imp.files[k].1)
-            .ok()
-            .and_then(|t| crate::merge::parse_stash(t, FileKind::Shbench).ok())
-            .expect("the import writes a bench that parses");
+        let Some(doc) = written_bench(imp, k, &format!("maestro view {}/{}", v.lib, v.cell)) else {
+            continue;
+        };
         let mut out = Document::new(FileKind::Shbench);
         copy_header(&mut out, &doc, &[VMAEFILE, VMAEFILES]);
         for (f, bytes) in &v.files {
@@ -272,5 +271,26 @@ mod tests {
         }
         let got = split("(\"sfyx\" 1 \"t\")\n(\"maefile\" \"a\" \"\")\n(\"end\")\n").unwrap_err();
         assert!(got[0].contains("outside a maestro view"), "{got:?}");
+    }
+
+    #[test]
+    fn a_bench_that_does_not_parse_is_reported_not_a_panic() {
+        let bad = b"schemify 1 shbench\nwire 0abc 0 0 1\n".to_vec();
+        let mut imp = Import {
+            files: vec![("l/c.shbench".into(), bad.clone())],
+            notes: Notes::default(),
+        };
+        let v = View {
+            lib: "l".into(),
+            cell: "c".into(),
+            files: vec![("maestro.sdb".into(), b"ab".to_vec())],
+        };
+        attach(&[v], &mut imp, &Files::new(), &ImportOptions::default());
+        assert_eq!(imp.files[0].1, bad);
+        let t = imp.notes.text();
+        assert!(
+            t.contains("maestro view l/c: the bench as imported does not parse"),
+            "{t}"
+        );
     }
 }
