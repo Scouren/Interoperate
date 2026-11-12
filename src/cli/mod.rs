@@ -12,6 +12,7 @@
 //! | `pdk-models` | `pdk_models` |
 //! | `pdk-scan` | `pdk_scan` |
 //! | `pdk-map` | `pdk_map` |
+//! | `virtuoso-pull`, `virtuoso-push` | `virtuoso_remote` (and the batch Virtuoso session over ssh `pdk-map --host` runs) |
 //! | `maestro-results` | `maestro_results` |
 //! | `layout-export`, `layout-import` | `layout` |
 //! | `ciel` | `ciel` |
@@ -30,6 +31,7 @@ mod pdk_map;
 mod pdk_models;
 mod pdk_scan;
 mod virtuoso_refresh;
+mod virtuoso_remote;
 mod xschem_import;
 
 use ciel::*;
@@ -41,6 +43,8 @@ use pdk_map::*;
 use pdk_models::*;
 use pdk_scan::*;
 use virtuoso_refresh::*;
+pub use virtuoso_remote::ENV;
+use virtuoso_remote::*;
 use xschem_import::*;
 
 fn slash(p: &Path) -> String {
@@ -58,6 +62,8 @@ pub fn run(args: &[String]) -> u8 {
         Some((cmd, rest)) if cmd == "pdk-models" => pdk_models(rest),
         Some((cmd, rest)) if cmd == "pdk-scan" => pdk_scan(rest),
         Some((cmd, rest)) if cmd == "pdk-map" => pdk_map(rest),
+        Some((cmd, rest)) if cmd == "virtuoso-pull" => virtuoso_pull(rest),
+        Some((cmd, rest)) if cmd == "virtuoso-push" => virtuoso_push(rest),
         Some((cmd, rest))
             if cmd == "virtuoso-export"
                 || cmd == "virtuoso-import"

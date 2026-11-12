@@ -262,10 +262,30 @@ impl Job {
                 let Ok(text) = String::from_utf8(text.clone()) else {
                     return Step::Failed(vec![format!("{sfyx}: not UTF-8")]);
                 };
-                let targets = match virtuoso::import_targets(&text) {
+                let mut targets = match virtuoso::import_targets(&text) {
                     Ok(t) => t,
                     Err(p) => return Step::Failed(p),
                 };
+                // The cells interop.map sends Virtuoso masters to, once the manifest says
+                // where their libraries are: instances take their pins and params from them
+                // (whether or not the dump carries the master), as the import resolves them.
+                if self.known("schemify.project") {
+                    let libs = self
+                        .files
+                        .get("schemify.project")
+                        .and_then(|m| crate::design::manifest_libs(m).ok())
+                        .unwrap_or_default();
+                    for r in &map.maps {
+                        let (l, c) = r.cellref.split_once(':').unwrap_or(("", &r.cellref));
+                        let dir = libs.get(l).or_else(|| opts.lib_dir.get(l));
+                        let dir = dir.map_or(l, String::as_str);
+                        if l != "core" {
+                            targets.extend(
+                                ["shcomp", "shprim"].map(|e| crate::design::cell_path(dir, c, e)),
+                            );
+                        }
+                    }
+                }
                 let need: Vec<String> = targets.into_iter().filter(|p| !self.known(p)).collect();
                 if !need.is_empty() {
                     return self.ask(need);

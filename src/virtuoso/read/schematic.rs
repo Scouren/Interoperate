@@ -192,14 +192,13 @@ pub(super) fn schematic_in(
             );
             continue;
         };
+        // The instance keeps the master it names; `group_missing_masters` makes these one
+        // row per master.
         if m.iface.is_none() {
             notes.review(
-                "name",
-                &cell,
-                format!(
-                    "{}: master {}/{} is not in the dump or the project",
-                    inst.name, inst.lib, inst.cell
-                ),
+                "master",
+                &format!("{}/{}", inst.lib, inst.cell),
+                format!("{cell}: {} → {cref}", inst.name),
             );
         }
         // §6.4 on the Schemify side: the instance keeps its analogLib mirror (whose pins
