@@ -382,7 +382,15 @@ fn export_test<F: Fn(&str) -> Option<InstInfo>>(
             continue;
         }
         let value = match swept.iter().find(|x| x.0 == name) {
-            Some((_, list)) => Some(list.clone()),
+            // A stored `start:step:stop` var with these points goes back as Maestro has it:
+            // the comma list would replace its optimizer range (§9.9, live l5_runmode).
+            Some((_, list)) => Some(
+                stored
+                    .and_then(|su| su.var(name))
+                    .map(|v| v.value.clone())
+                    .filter(|v| colon_points(v).is_some_and(|p| p.join(",") == *list))
+                    .unwrap_or_else(|| list.clone()),
+            ),
             None => to_ael(c.field(r, 1), &vars, cell, notes),
         };
         if let Some(v) = value {
