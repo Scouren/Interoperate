@@ -8,7 +8,8 @@
 # script, live/checks and this checkout's schemify.il to the host's work directory
 # (SFYCHECK_WORK there, default ~/sfytest/checks-a), runs `run.sh a_ade` (the run lock), then
 # imports the session's dump out/a_dump.sfyx here, checks the bench it gives (the SPICE and
-# Spectre forms, the test records, the report rows), netlists each of its tests with
+# Spectre forms, the test records, the report rows; another test's checks are SKIP lines in
+# the default build, which imports the mapped test only), netlists each of its tests with
 # Schemify (tests/virtuoso_live.rs `a_dump_netlist`) and runs Spectre on every netlist on
 # the host under the run lock. Prints the check's lines and its own PASS/FAIL lines; exits
 # non-zero on a FAIL. Files stay in $SFYCHECK_LOCAL (default a fresh temporary directory).
@@ -36,6 +37,12 @@ ssh "$host" "bash -c 'SFYCHECK_WORK=\$HOME/$work bash $work/src/run.sh a_ade'" >
 
 verdicts=()
 check() { if eval "$2"; then verdicts+=("PASS a_drive: $1"); else verdicts+=("FAIL a_drive: $1"); fi; }
+# A check of a test other than the mapped one: a SKIP where the bench has no test records
+# (the default build imports the mapped test only: they are the cadence-records format's).
+tcheck() {
+  if grep -q '^test ' "$b"; then check "$@"
+  else verdicts+=("SKIP a_drive: $1 (the default build imports the mapped test only: cadence-records)"); fi
+}
 if scp -q "$host:$work/out/a_dump.sfyx" "$tmp/a_dump.sfyx"; then
   SFY_A_DUMP="$tmp/a_dump.sfyx" SFY_A_CELL=sfyprobe_a/rc.shbench SFY_A_OUT="$tmp/nl" \
     cargo test -q --release --manifest-path "$repo/Cargo.toml" --test virtuoso_live a_dump_netlist -- --ignored >"$tmp/netlist.txt" 2>&1 \
@@ -46,15 +53,15 @@ if scp -q "$host:$work/out/a_dump.sfyx" "$tmp/a_dump.sfyx"; then
   "$bin" virtuoso-import "$tmp/imp" a_dump.sfyx >"$tmp/import.txt"
   b="$tmp/imp/sfyprobe_a/rc.shbench"
   r="$tmp/imp/a_dump.report.txt"
-  check "noise of p/n comes back as .noise v(out) V0" "grep -q '^  | .noise v(out) V0 dec 10 1 1g$' $b"
-  check "noise lin=4 comes back as lin 5 (5 points)" "grep -q '^  | .noise v(out) V0 lin 5 1 5$' $b"
-  check "stb is Spectre's statement" "grep -q '^  | stb stb start=1 stop=1G dec=10 probe=IPRB0$' $b"
-  check "pss before pac" "sed -n '/^code PA spectre/,/^code /p' $b | grep -n . | grep -q '4:  | pac pac'"
-  check "dc temperature sweep is param=temp" "grep -q '^  | dc dc param=temp start=-40 stop=125 step=5$' $b"
-  check "TO's simulator options" "grep -q '^  | .options gmin=1e-14 reltol=1e-5$' $b"
-  check "TO's temperature list: its first point" "sed -n '/^code TO/,/^code /p' $b | grep -q '^  | .temp -40$'"
-  check "N1 does not run C2" "sed -n '/^test N1$/,/^test /p' $b | grep -q '^  corner C1$'"
-  check "TR is bound to rr" "sed -n '/^test TR$/,/^test /p' $b | grep -q '^  design ./rr$'"
+  tcheck "noise of p/n comes back as .noise v(out) V0" "grep -q '^  | .noise v(out) V0 dec 10 1 1g$' $b"
+  tcheck "noise lin=4 comes back as lin 5 (5 points)" "grep -q '^  | .noise v(out) V0 lin 5 1 5$' $b"
+  tcheck "stb is Spectre's statement" "grep -q '^  | stb stb start=1 stop=1G dec=10 probe=IPRB0$' $b"
+  tcheck "pss before pac" "sed -n '/^code PA spectre/,/^code /p' $b | grep -n . | grep -q '4:  | pac pac'"
+  tcheck "dc temperature sweep is param=temp" "grep -q '^  | dc dc param=temp start=-40 stop=125 step=5$' $b"
+  tcheck "TO's simulator options" "grep -q '^  | .options gmin=1e-14 reltol=1e-5$' $b"
+  tcheck "TO's temperature list: its first point" "sed -n '/^code TO/,/^code /p' $b | grep -q '^  | .temp -40$'"
+  tcheck "N1 does not run C2" "sed -n '/^test N1$/,/^test /p' $b | grep -q '^  corner C1$'"
+  tcheck "TR is bound to rr" "sed -n '/^test TR$/,/^test /p' $b | grep -q '^  design ./rr$'"
   check "reported: hspiceD, evalType, specs, temperature sweep, corner group" \
     "grep -q 'simulator hspiceD' $r && grep -q 'evaluated over corners' $r && grep -q 'spec of inf' $r && grep -q 'temperature sweep' $r && grep -q 'a corner group' $r"
   ls "$tmp/nl" >"$tmp/nl.txt"
@@ -75,10 +82,14 @@ EOF
       check "Spectre runs Schemify's netlist $f (exit $code, $n ERROR lines)" "[ '$code' = 0 ] && [ '$n' = 0 ]"
     done < <(grep ' exit ' "$tmp/spectre.txt")
     # Ground: the D4 sweep's out is R0/R1's divider of V0's 1 V at every point.
-    scp -q -r "$host:$work/out/a_nl/D4.raw" "$tmp/" 2>/dev/null || true
-    cat "$tmp"/D4.raw/*.dc 2>/dev/null | grep '^"out" ' >"$tmp/ground.txt" || true
-    check "gnd! is Spectre's ground in Schemify's netlist: out = 0.5 V ($(grep -m1 "[0-9]" "$tmp/ground.txt"))" \
-      "grep -q '^\"out\" 5.000000000000000e-01' $tmp/ground.txt"
+    if [[ -f $tmp/nl/D4.scs ]]; then
+      scp -q -r "$host:$work/out/a_nl/D4.raw" "$tmp/" 2>/dev/null || true
+      cat "$tmp"/D4.raw/*.dc 2>/dev/null | grep '^"out" ' >"$tmp/ground.txt" || true
+      check "gnd! is Spectre's ground in Schemify's netlist: out = 0.5 V ($(grep -m1 "[0-9]" "$tmp/ground.txt"))" \
+        "grep -q '^\"out\" 5.000000000000000e-01' $tmp/ground.txt"
+    else
+      verdicts+=("SKIP a_drive: gnd! is Spectre's ground in Schemify's netlist (no D4 netlist: the default build imports the mapped test only)")
+    fi
   fi
 else
   verdicts+=("FAIL a_drive: no dump")
