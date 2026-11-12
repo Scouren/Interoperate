@@ -77,7 +77,8 @@ fn import(root: &Path, bench: &str, base: &Path, h: &History) -> Result<PathBuf,
         .jobs
         .iter()
         .map(|j| {
-            let mut k = format!("- {} -", j.corner.as_deref().unwrap_or("-"));
+            let sample = j.sample.map_or("-".to_owned(), |k| k.to_string());
+            let mut k = format!("- {} {sample}", j.corner.as_deref().unwrap_or("-"));
             for (n, v) in &j.sets {
                 k.push_str(&format!(" {n}={v}"));
             }
@@ -85,6 +86,13 @@ fn import(root: &Path, bench: &str, base: &Path, h: &History) -> Result<PathBuf,
         })
         .collect();
     let hex = design_hash(root, bench, &keys)?;
+    // The device of a Virtuoso instance path (`/I0/R0`) in the bench's ngspice name map, by
+    // which op() and the OP annotation read operating-point vectors (run.md §4).
+    // ponytail: the name map is Schemify's netlister's, not in its public SDK, so every
+    // operating-point parameter is reported as not mapped until the host can map it.
+    let dev = |_: &str| -> Result<String, String> {
+        Err("no ngspice name map in Schemify's public interface".into())
+    };
     let dir = root.join(".schemify/runs").join(format!("v{}", &hex[..16]));
     let source = format!(
         "  source virtuoso {}/{}/{} ",
@@ -126,13 +134,26 @@ fn import(root: &Path, bench: &str, base: &Path, h: &History) -> Result<PathBuf,
         }
         let src = base.join(&job.waves);
         let t = std::fs::read_to_string(&src).map_err(|e| io(&src, e))?;
-        let a = wave::parse(&t).map_err(|e| (2, format!("{}: {e}", src.display())))?;
+        let mut a = wave::parse(&t).map_err(|e| (2, format!("{}: {e}", src.display())))?;
+        let missing = wave::op_params(&mut a, dev);
+        if !missing.is_empty() {
+            println!(
+                "note: point {j}: operating-point parameters of {} are not mapped",
+                missing.join(", ")
+            );
+        }
+        for (r, vals) in wave::steps(&t) {
+            println!(
+                "note: point {j}: result {r} is a family: its steps are {} in that order",
+                vals.join(" ")
+            );
+        }
         write(&dir.join(j.to_string()).join("out.raw"), &wave::raw(&a))?;
         let skipped = wave::skipped(&t);
         if !skipped.is_empty() {
             println!(
-                "note: point {j}: {} result value(s) are no waveform and are not mapped (the \
-                 operating point and noise summaries come from Schemify's own run): {}",
+                "note: point {j}: {} result value(s) are no waveform and are not mapped (noise \
+                 contributions, stb margins; core_A C12): {}",
                 skipped.len(),
                 skipped.join(" ")
             );

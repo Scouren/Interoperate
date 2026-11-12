@@ -50,6 +50,9 @@ pub struct Job {
     pub corner: Option<String>,
     /// The `.rdb` design point number.
     pub point: i64,
+    /// The Monte Carlo sample (the point's iteration, `testStatus`), `None` outside a
+    /// Monte Carlo history: what keeps the samples' job keys apart (run.md §4).
+    pub sample: Option<u32>,
     /// `(var, value text)`: the vars swept across design points, by name.
     pub sets: Vec<(String, String)>,
     /// Maestro's status message for the point (`done` when it simulated).
@@ -219,6 +222,10 @@ pub fn convert(dump: &Dump, rdb: &[u8]) -> Result<History, String> {
         .filter_map(|r| Some((id(&r[0]), results.get(&id(&r[1]))?.clone())))
         .collect();
 
+    // A Monte Carlo history holds the statistical parameters (live MonteCarlo.0:
+    // monteCarlo::param::seed …, type `statistical`); each point is then one sample, its
+    // iteration the testStatus row's eighth column (1, 2, 3).
+    let mc = params.iter().any(|r| r[9].text() == "statistical");
     let mut jobs: BTreeMap<(Option<String>, i64), (i64, Job)> = BTreeMap::new();
     for r in t("testStatus")? {
         if id(&r[1]) != tid {
@@ -240,6 +247,9 @@ pub fn convert(dump: &Dump, rdb: &[u8]) -> Result<History, String> {
         let job = Job {
             corner: (!corner.is_empty()).then(|| corner.clone()),
             point: *dp,
+            sample: mc
+                .then(|| r.get(7).and_then(Val::int).unwrap_or(*dp))
+                .and_then(|k| u32::try_from(k).ok()),
             sets,
             status: message(&r[6]).unwrap_or_else(|| "no status".into()),
             vars: vars
@@ -351,6 +361,10 @@ pub fn results_file(
         ));
         if let Some(c) = &job.corner {
             attr(&mut out, "corner", &[c]);
+        }
+        // run.md §4's job attribute order: test, config, corner, sample.
+        if let Some(k) = job.sample {
+            attr(&mut out, "sample", &[&k.to_string()]);
         }
         for (n, v) in &job.sets {
             attr(&mut out, "set", &[n, v]);

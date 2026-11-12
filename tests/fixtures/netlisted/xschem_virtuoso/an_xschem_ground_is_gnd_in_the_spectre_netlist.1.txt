@@ -1,0 +1,29 @@
+top mylib/div.shbench for Spectre
+== mylib/div.shbench
+schemify 1 shbench
+  provenance "xschem mylib/div.sch"
+  xfp 2452ecc36bfd3dc1
+
+inst 40k7mq core:res
+  at 100 0 R0
+  name R1
+inst hw8gpj core:res
+  at 200 0 R0
+  name R2
+inst w9jg73 core:vsource
+  at 0 0 R0
+  name V1
+  value 1
+
+label 93kaj3 200 -30 R0 OUT
+label ka3q0w 100 -30 R0 IN
+label m1b2rb 0 -30 R0 IN
+label mqm8w7 100 30 R0 OUT
+label n0kf2h 0 30 R0 GND
+  global true
+label zs5th1 200 30 R0 GND
+  global true
+== schemify.project
+schemify 1 project
+
+lib mylib path mylib

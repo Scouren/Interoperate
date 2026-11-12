@@ -17,8 +17,11 @@
 //! One `# analysis <name>` line per OCEAN result, then per waveform `# <signal> <n> points
 //! <V|I>` (the kind word absent means `V`) and `n` lines `x y` (real) or `x re im` (complex).
 //! `%.17g` text parses back to the same double, so the raw holds the simulator's bits.
-//! A `# skipped <result> <output>` line names a result value that is no waveform (a dcOp
-//! value, a noise summary): [`skipped`] lists them for the report.
+//! A `# skipped <result> <output>` line names a result value that is no waveform (a noise
+//! contribution, an stb margin): [`skipped`] lists them for the report. A `# steps <result>
+//! <value>…` line says the next blocks of that result are its family's members in that order
+//! (pac sidebands): [`steps`] lists them. A dcOpInfo signal `<inst>:<param>` is a device's
+//! operating-point parameter; a signal named `@…` is written to the raw file verbatim.
 
 /// One waveform of one analysis.
 #[derive(Clone, Debug, PartialEq)]
@@ -66,7 +69,7 @@ pub fn parse(text: &str) -> Result<Vec<Analysis>, String> {
             return Err(bad("a value outside a waveform"));
         };
         let w: Vec<&str> = head.split_whitespace().collect();
-        if let ["skipped", _, _] = w[..] {
+        if matches!(w[..], ["skipped", _, _] | ["steps", _, ..]) {
             continue;
         }
         if let ["analysis", name] = w[..] {
@@ -119,6 +122,74 @@ pub fn parse(text: &str) -> Result<Vec<Analysis>, String> {
     Ok(out)
 }
 
+/// Spectre operating-point parameter names whose ngspice device vector is spelled
+/// otherwise (`ids` is ngspice's `id`, a resistor's `pwr` its `p`).
+const OP_NAMES: [(&str, &str); 2] = [("ids", "id"), ("pwr", "p")];
+
+/// Moves the device operating-point parameters of `analyses` (a `dcOpInfo` result's
+/// `<inst path>:<param>` signals) into the operating point (`dcOp`, made when missing) as
+/// ngspice's device vectors `@<dev>[<param>]`, `dev` naming the device of a Virtuoso
+/// instance path (the bench's name map, run.md §4); also under ngspice's name of a
+/// parameter Spectre spells otherwise ([`OP_NAMES`]). Non-finite values are left out.
+/// Returns the instances `dev` has no device for.
+pub fn op_params(
+    analyses: &mut Vec<Analysis>,
+    dev: impl Fn(&str) -> Result<String, String>,
+) -> Vec<String> {
+    let Some(k) = analyses.iter().position(|a| a.name == "dcOpInfo") else {
+        return Vec::new();
+    };
+    let info = analyses.remove(k);
+    let mut out: Vec<Signal> = Vec::new();
+    let mut missing: Vec<String> = Vec::new();
+    for s in info.signals {
+        let Some((inst, param)) = s.name.rsplit_once(':') else {
+            continue;
+        };
+        if !s.re.first().is_some_and(|x| x.is_finite()) {
+            continue;
+        }
+        let d = match dev(inst) {
+            Ok(d) => d,
+            Err(e) => {
+                if !missing.iter().any(|m| m.starts_with(inst)) {
+                    missing.push(format!("{inst} ({e})"));
+                }
+                continue;
+            }
+        };
+        let alias = OP_NAMES.iter().find(|o| o.0 == param).map(|o| o.1);
+        for p in std::iter::once(param).chain(alias) {
+            out.push(Signal {
+                name: format!("@{d}[{p}]"),
+                current: false,
+                x: vec![0.0],
+                re: vec![s.re[0]],
+                im: Vec::new(),
+            });
+        }
+    }
+    match analyses.iter_mut().find(|a| a.name == "dcOp") {
+        Some(op) => op.signals.extend(out),
+        None if !out.is_empty() => analyses.push(Analysis {
+            name: "dcOp".into(),
+            signals: out,
+        }),
+        None => {}
+    }
+    missing
+}
+
+/// `(result, values)` of each `# steps` line of an export, in file order.
+pub fn steps(text: &str) -> Vec<(String, Vec<String>)> {
+    text.lines()
+        .filter_map(|l| {
+            let mut w = l.strip_prefix("# steps ")?.split_whitespace();
+            Some((w.next()?.to_owned(), w.map(str::to_owned).collect()))
+        })
+        .collect()
+}
+
 /// The `<result>/<output>` of each `# skipped` line of an export, in file order.
 pub fn skipped(text: &str) -> Vec<String> {
     text.lines()
@@ -139,6 +210,9 @@ pub fn skipped(text: &str) -> Vec<String> {
 /// voltage `/a/b` is `v(a.b)`, a terminal current `/V0/PLUS` (or `/V0/p`) is `i(V0)`;
 /// `<i>` bus bits become `[i]`.
 pub fn raw_name(s: &Signal) -> String {
+    if s.name.starts_with('@') {
+        return s.name.clone();
+    }
     let p = s.name.strip_prefix('/').unwrap_or(&s.name);
     let p = if s.current {
         p.strip_suffix("/PLUS")
@@ -183,7 +257,12 @@ fn plot(out: &mut Vec<u8>, analysis: &str, g: &[&Signal]) {
     // OCEAN may name a result `tran-tran` (its logFile entry): the analysis is the first word.
     let (title, scale, kind) = match analysis.split('-').next().unwrap_or("") {
         "tran" => ("Transient Analysis", "time", "time"),
-        "ac" | "noise" | "xf" | "sp" | "stb" => ("AC Analysis", "frequency", "frequency"),
+        // A frequency sweep, the periodic small-signal ones too (pac: its sidebands), so a
+        // pac never shares variables with the pss_fd after it (Schemify merges consecutive
+        // plots of the same variables into one stepped dataset, live a_res).
+        "ac" | "noise" | "xf" | "sp" | "stb" | "pac" | "pnoise" | "pxf" | "pstb" => {
+            ("AC Analysis", "frequency", "frequency")
+        }
         "dc" => ("DC transfer characteristic", "sweep", "voltage"),
         // The operating point (`dcOp`, one point per node voltage and terminal current):
         // the plot run.md §4 reads `op` data and the OP annotation from.
@@ -283,5 +362,32 @@ mod tests {
                 && sk.iter().any(|x| x.starts_with("dcOpInfo/"))
         );
         assert!(String::from_utf8_lossy(&raw(&a)).contains("Plotname: Operating Point"));
+    }
+
+    /// dcOpInfo parameters become the operating point's `@dev[p]` vectors (what op() reads);
+    /// pac sidebands are consecutive blocks after their `# steps` line.
+    #[test]
+    fn op_params_and_sidebands() {
+        let t = "# analysis dcOp\n# /out 1 points V\n0 0.5\n# analysis dcOpInfo\n\
+                 # /R0:i 1 points V\n0 0.0005\n# /R0:pwr 1 points V\n0 0.00025\n\
+                 # /R0:trise 1 points V\n0 nan\n# /Q9:i 1 points V\n0 1\n\
+                 # steps pac -1 0\n# analysis pac\n# /out 1 points V\n1 2 0\n\
+                 # analysis pac\n# /out 1 points V\n1 3 0\n";
+        let mut a = parse(t).unwrap();
+        let missing = op_params(&mut a, |p| match p {
+            "/R0" => Ok("r0".into()),
+            _ => Err("no instance".into()),
+        });
+        assert_eq!(missing, ["/Q9 (no instance)"]);
+        let op = a.iter().find(|x| x.name == "dcOp").unwrap();
+        let names: Vec<&str> = op.signals.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["/out", "@r0[i]", "@r0[pwr]", "@r0[p]"]);
+        let r = String::from_utf8_lossy(&raw(&a)).into_owned();
+        assert!(r.contains("\t@r0[i]\t"), "{r}");
+        assert_eq!(
+            steps(t),
+            [("pac".to_owned(), vec!["-1".to_owned(), "0".to_owned()])]
+        );
+        assert_eq!(a.iter().filter(|x| x.name == "pac").count(), 2);
     }
 }

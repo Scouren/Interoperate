@@ -88,7 +88,7 @@ struct Test {
     corners: Vec<(String, bool)>,
     /// `(corner, file, section)`: corner `""` = the test's model files.
     models: Vec<(String, String, String)>,
-    /// `(name, kind, expr)`: kind `point` or `net`.
+    /// `(name, kind, expr)`: kind `point`, `net` or `terminal` (a saved terminal current).
     outputs: Vec<(String, String, String)>,
     /// `(output, op, value)`: op `gt` or `lt`.
     specs: Vec<(String, String, String)>,
