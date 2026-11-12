@@ -68,6 +68,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
+      # rust-toolchain.toml pins stable, which wins over the installed default: cargo-fuzz needs nightly's -Z.
+      RUSTUP_TOOLCHAIN: nightly
       MINUTES: ${{ inputs.fuzz_minutes || '60' }}
       CORPUS: fuzz/corpus/${{ matrix.target }}
     steps:
@@ -112,6 +114,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
+      # rust-toolchain.toml pins stable, which wins over the installed default: cargo-fuzz needs nightly's -Z.
+      RUSTUP_TOOLCHAIN: nightly
       MINUTES: ${{ inputs.fuzz_minutes || '60' }}
       CORPUS: fuzz/corpus/${{ matrix.target }}
     steps:
