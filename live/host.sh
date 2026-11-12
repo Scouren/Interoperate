@@ -16,9 +16,13 @@
 # stdin of `ssh … sh -s`. Heavy steps wait while the host's 1-minute load is 16 or more and
 # run under nice 19 with SFY_HOST_JOBS cargo jobs (default 4).
 #
-# kit fetches out/report.md and summary.txt into $SFY_HOST_OUT (default a fresh temporary
-# directory). A flag that brings in a PDK or a user's design (--pdk --lib --cell --callbacks
-# --project) can put PDK names in them: then it fetches nothing and prints only the counts.
+# kit fetches the work directory without its Virtuoso libraries (out/report.md, summary.txt
+# and what verify grades) into $SFY_HOST_OUT (default a fresh temporary directory). With a
+# `schemify` on PATH here it grades it again here (run.sh --step verify; the host's report
+# stays as out/report.host.md): the host has none, and the analogLib round trip netlists
+# with a development build's. A flag that brings in a PDK or a user's design (--pdk --lib
+# --cell --callbacks --project) can put PDK names in them: then it fetches nothing and
+# prints only the counts.
 #
 # SFY_HOST_LOCAL: the site-local checks sync ships (default live/local of the main checkout;
 # never in git). SFY_HOST_VENDOR: the local `cargo vendor` cache (default ~/.cache/sfy-host).
@@ -96,9 +100,16 @@ EOF
     if [[ $pdk == 0 ]]; then
       dest="${SFY_HOST_OUT:-$(mktemp -d)}"
       mkdir -p "$dest"
-      remote <<< 'cd work && tar -c -f - out/report.md summary.txt 2>/dev/null' | tar -x -f - -C "$dest" \
-        || echo "host.sh: the fetch was incomplete" >&2
+      remote <<< 'cd work && tar -c -f - --exclude=./libs --exclude=./si --exclude=./sfylive-results.tgz . 2>/dev/null' \
+        | tar -x -f - -C "$dest" || echo "host.sh: the fetch was incomplete" >&2
       echo "host.sh: $dest/out/report.md, $dest/summary.txt"
+      if command -v schemify >/dev/null && [[ -f $dest/out/report.md ]]; then
+        cp "$dest/out/report.md" "$dest/out/report.host.md"
+        "$here/run.sh" --step verify --work "$dest" --cdslib "$dest/cds.lib" > "$dest/regrade.log" 2>&1 || status=1
+        echo "host.sh: graded again here with $(command -v schemify) (log: $dest/regrade.log)"
+        grep '^Verdict:' "$dest/out/report.md" || true
+        for w in PASS FAIL WARN SKIP INFO; do printf '%s %s  ' $w "$(grep -c "^| [^|]* | $w |" "$dest/out/report.md")"; done; echo
+      fi
     fi
     exit "$status"
     ;;

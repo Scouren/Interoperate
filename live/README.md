@@ -102,7 +102,11 @@ SFY_HOST=<host> live/host.sh check <name>  # checks/run.sh <name>
 only, so the host builds offline (`--locked` holds: it is a source replacement, not a
 `[patch]`) and needs no access to the private git dependencies. It ships an untracked
 `live/local/` too. `kit` runs from `~/sfytest/head` with `--work ~/sfytest/head/work
---cdslib ~/sfytest/cds.lib --env ~/sfytest/env.csh`. Given `--pdk`, `--lib`, `--cell`,
+--cdslib ~/sfytest/cds.lib --env ~/sfytest/env.csh`, then fetches the work directory without
+its Virtuoso libraries. `roundtrip.<project>.alib` netlists with `schemify netlist`, which
+only a development build of Schemify has and the host lacks (SKIP there): with a `schemify`
+on PATH here, `kit` grades the fetched directory again here (`run.sh --step verify`; the
+host's report stays as `out/report.host.md`). Given `--pdk`, `--lib`, `--cell`,
 `--callbacks` or `--project` it fetches nothing and prints only the counts.
 
 Every subcommand takes a local lock, so only one ssh session reaches the host at a time. It
@@ -120,7 +124,7 @@ waits while the host's 1-minute load is 16 or more, and runs under `nice 19` wit
 | `dump.*` | `SfyExport` dumped every library back. |
 | `roundtrip.p_<dir>.*` | The same two round trips for each `--project`. |
 | `roundtrip.<project>.core` | The dumps import to the original Schemify files byte for byte. This is the exact round trip of spec §7.4. |
-| `roundtrip.<project>.alib` | On analogLib masters, every bench netlists the same before and after Virtuoso. |
+| `roundtrip.<project>.alib` | On analogLib masters, every bench netlists the same before and after Virtuoso, by the `schemify` on PATH (`schemify netlist`, a development build's: SKIP without one). |
 | `dumpfix.*` | Dumps that the SKILL dumper wrote load and dump back to the same records, covering every shape kind, label kind, bus, net expression and text view. |
 | `selftest.*` | `SfySelfTest` (dump, load, dump) agrees on a loaded cell. |
 | `refuse.*` | A truncated or malformed file is refused and creates nothing, an existing view needs `?overwrite`, and a cellview open for editing is never rewritten. |
