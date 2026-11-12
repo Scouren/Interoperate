@@ -9,7 +9,7 @@
 //! | `virtuoso-export`, `virtuoso-import`, `xschem-export`, `install-skill` | `jobs` |
 //! | `pdk-derived` | `pdk_derived` |
 //! | `virtuoso-refresh` | `virtuoso_refresh` |
-//! | `pdk-models` | `pdk_models` |
+//! | `pdk-models`, `pdk-remote-models` | `pdk_models` |
 //! | `pdk-scan` | `pdk_scan` |
 //! | `pdk-map` | `pdk_map` |
 //! | `virtuoso-pull`, `virtuoso-push` | `virtuoso_remote` (and the batch Virtuoso session over ssh `pdk-map --host` runs) |
@@ -60,6 +60,7 @@ pub fn run(args: &[String]) -> u8 {
         Some((cmd, rest)) if cmd == "pdk-derived" => pdk_derived(rest),
         Some((cmd, rest)) if cmd == "virtuoso-refresh" => virtuoso_refresh(rest),
         Some((cmd, rest)) if cmd == "pdk-models" => pdk_models(rest),
+        Some((cmd, rest)) if cmd == "pdk-remote-models" => pdk_remote_models(rest),
         Some((cmd, rest)) if cmd == "pdk-scan" => pdk_scan(rest),
         Some((cmd, rest)) if cmd == "pdk-map" => pdk_map(rest),
         Some((cmd, rest)) if cmd == "virtuoso-pull" => virtuoso_pull(rest),

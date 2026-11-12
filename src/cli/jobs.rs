@@ -31,6 +31,7 @@ usage: schemify-interop virtuoso-export <project-dir> <cell-file|dir>... -o <fil
        schemify-interop pdk-map --scan <dir> (--dump <cdfnames.sfyx> | --host <ssh name> --vlib <lib>...) [--lib <name>] -o <interop.map>
        schemify-interop pdk-map --remote-script --vlib <lib>...
        schemify-interop pdk-models [--host <ssh name>] --root <dir> --entry <relpath>... --from <d> --to <d> -o <outdir>   (d: ngspice|espice|xyce|ltspice|hspice|spectre|vacask)
+       schemify-interop pdk-remote-models <project-dir> --host <[user@]host> [--family <f>] [--to <simulator>] [-o <host dir>]
        schemify-interop maestro-results <project-dir> <dump.sfyx> <bench.shbench>
        schemify-interop layout-export <project-dir> <bundle-dir>
        schemify-interop layout-import <project-dir> <lib>/<cell>[/<view>] -o <bundle-dir>
