@@ -21,6 +21,8 @@
 //! converted <n> file(s)           exit 0 or 1; on exit 2 `not written` instead
 //! diag <relpath> <code> <count> [<word>...]   per file, per SpiceRack diagnostic code; a
 //!                                 refusal (`W`) adds its statements' first words (never the cards)
+//! models <path>                   per entry, when written: the converted entry, absolute
+//!                                 (what `set PDK_MODELS` takes where the tree is)
 //! end
 //! ```
 //!
@@ -234,8 +236,18 @@ fn convert(
         }
     }
     let lossy = !report.is_empty();
+    // Each converted entry, absolute: the path `set PDK_MODELS` takes where the tree is.
+    let abs =
+        std::fs::canonicalize(out).map_or_else(|_| out.to_path_buf(), |p| spice::normalize(&p));
+    let models: String = entries
+        .iter()
+        .map(|e| {
+            let to = abs.join(e.strip_prefix(root).unwrap_or(e));
+            format!("models {}\n", to.to_string_lossy().replace('\\', "/"))
+        })
+        .collect();
     (
-        format!("converted {} file(s)\n{report}end\n", done.len()),
+        format!("converted {} file(s)\n{report}{models}end\n", done.len()),
         u8::from(lossy),
     )
 }

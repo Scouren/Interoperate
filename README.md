@@ -353,7 +353,9 @@ removed otherwise.
 `schemify-interop pdk-models --root <dir> --entry <relpath>... --from <d> --to <d> -o <outdir>`
 converts each model file a kit reaches into another dialect at the same relative path,
 reporting losses by SpiceRack diagnostic code (`diag <relpath> <code> <count>`, never the
-cards). The root must contain every file the kit includes (sky130: `--root sky130A`).
+cards). The root must contain every file the kit includes (sky130: `--root sky130A`). A
+`models <path>` line per entry names the converted file, absolute: what `set PDK_MODELS`
+takes.
 
 A dialect is named as the Schemify simulator that reads it (`ngspice`, `espice`, `xyce`,
 `ltspice`, `spectre`; also `hspice`, `vacask`, and `spice` for ngspice), so `--to` takes the
@@ -372,9 +374,9 @@ models /home/me/.cache/schemify/myPdk/ngspice/top.scs
 end
 ```
 
-Each `models` line is a converted entry on the host: the path `set PDK_MODELS` takes in a
-project whose runs go to that host (`host` in its tech map). When the simulator reads the
-kit's own dialect nothing is copied and no ssh runs: the `models` lines name the kit's files.
+Here the `models` lines are paths on the host, for a project whose runs go there (`host` in
+its tech map). When the simulator reads the kit's own dialect nothing is copied and no ssh
+runs: the `models` lines name the kit's files.
 
 ## What does not cross
 

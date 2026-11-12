@@ -3,9 +3,9 @@
 //! `--host <ssh name>` converts a kit where it lives, for one that must not leave its host:
 //! the `schemify-interop` there runs the same conversion (one `ssh <host> sh -s`, whatever
 //! the login shell), so `--root` and `-o` are directories on the host and only the report
-//! comes back. Before its `end`, a `models <path>` line per entry names the converted file
-//! on the host: what `set PDK_MODELS` takes for the simulator `--to` names. A kit already in
-//! that dialect is not copied: its `models` lines name the kit's own files and no ssh runs.
+//! comes back: its `models <path>` lines name the converted entries on the host, what `set
+//! PDK_MODELS` takes for the simulator `--to` names. A kit already in that dialect is not
+//! copied: the `models` lines name the kit's own files and no ssh runs.
 //! `SFY_INTEROP` is the command on the host (default `schemify-interop`, from the login
 //! `PATH` or `~/.local/bin`).
 
@@ -27,8 +27,8 @@ pub(super) fn pdk_models(args: &[String]) -> u8 {
     code
 }
 
-/// `pdk-models <args>` run on `host`: its report with the `models` lines, and its status
-/// (2 too when ssh or the command there fails).
+/// `pdk-models <args>` run on `host`: its report and its status (2 too when ssh or the
+/// command there fails).
 fn on_host(host: &str, args: &[String]) -> (String, u8) {
     let r = match crate::pdk_models::request(args) {
         Ok(r) => r,
@@ -38,15 +38,14 @@ fn on_host(host: &str, args: &[String]) -> (String, u8) {
     if host.starts_with('-') {
         return (format!("no ssh host name: {host}\n"), 2);
     }
-    let at = |dir: &str| -> String {
-        let dir = dir.trim_end_matches('/');
-        r.entries
-            .iter()
-            .map(|e| format!("models {dir}/{e}\n"))
-            .collect()
-    };
     if r.from == r.to {
-        return (format!("converted 0 file(s)\n{}end\n", at(r.root)), 0);
+        let root = r.root.trim_end_matches('/');
+        let own: String = r
+            .entries
+            .iter()
+            .map(|e| format!("models {root}/{e}\n"))
+            .collect();
+        return (format!("converted 0 file(s)\n{own}end\n"), 0);
     }
     let cmd = std::env::var("SFY_INTEROP")
         .ok()
@@ -81,10 +80,9 @@ fn on_host(host: &str, args: &[String]) -> (String, u8) {
         (Ok(()), Ok(o)) => o,
         (Err(e), _) | (_, Err(e)) => return fail(format!("ssh: {e}")),
     };
-    let text = String::from_utf8_lossy(&out.stdout);
-    match (out.status.code(), text.strip_suffix("end\n")) {
-        (Some(c @ (0 | 1)), Some(body)) => (format!("{body}{}end\n", at(r.out)), c as u8),
-        (Some(2), _) => (text.into_owned(), 2),
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    match out.status.code() {
+        Some(c @ 0..=2) => (text, c as u8),
         _ => {
             print!("{text}");
             fail(format!("the conversion did not finish ({})", out.status))
