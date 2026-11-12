@@ -1,5 +1,5 @@
 //! `interop.map`: cell, pin and parameter translation between Schemify libraries and
-//! Virtuoso libraries (spec `interop.md` §8.2); plus
+//! Virtuoso libraries, and the Spectre model file of a deck's (spec `interop.md` §8.2); plus
 //! [`resolve`], the export-side lookup that turns a Design and a mapping into a [`Plan`].
 //!
 //! The file is line records without a header (format.md §2). It is read with the format
@@ -44,11 +44,27 @@ pub struct MapRow {
     pub line: u32,
 }
 
+/// One `model` row: a deck's model file and the file Spectre reads in its place (a kit's
+/// HSPICE corner file and its Spectre one).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ModelRow {
+    /// The file as a bench names it (`${PDK}/corners.lib`).
+    pub path: String,
+    /// The Spectre file, spelled the same way.
+    pub spectre: String,
+    /// `(bench section, Spectre section)`; a section not listed keeps its name.
+    pub sections: Vec<(String, String)>,
+    /// 1-based line of the `model` record.
+    pub line: u32,
+}
+
 /// A parsed mapping file. Empty = identity everywhere (mirrors, `schemify_core`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Mapping {
     /// `map` rows, in file order.
     pub maps: Vec<MapRow>,
+    /// `model` rows, in file order.
+    pub models: Vec<ModelRow>,
 }
 
 impl Mapping {
@@ -56,10 +72,11 @@ impl Mapping {
     ///
     /// # Errors
     ///
-    /// Every malformed row, one per line (`line N: …`): a record other than `map`,
-    /// wrong arity, an attribute the record does not take, a `scale` that is not an
-    /// expression, `same` beside other attributes, a duplicate cell, Virtuoso target,
-    /// pin or param, a param both mapped and dropped, more than [`ROWS_MAX`] rows.
+    /// Every malformed row, one per line (`line N: …`): a record other than `map` or
+    /// `model`, wrong arity, an attribute the record does not take, a `scale` that is not
+    /// an expression, `same` beside other attributes, a duplicate cell, Virtuoso target,
+    /// pin, param, model file, Spectre file or section, a param both mapped and dropped,
+    /// more than [`ROWS_MAX`] rows.
     pub fn parse(text: &str) -> Result<Mapping, Vec<String>> {
         let src = format!("schemify 1 journal\n{text}");
         let doc = parse(src.as_bytes()).map_err(|e| {
@@ -92,7 +109,11 @@ impl Mapping {
                     Ok(row) => m.maps.push(row),
                     Err(e) => errs.extend(e),
                 },
-                w => errs.push(format!("line {line}: unknown record `{w}` (map)")),
+                "model" => match model_row(&doc, r, &fields, line) {
+                    Ok(row) => m.models.push(row),
+                    Err(e) => errs.extend(e),
+                },
+                w => errs.push(format!("line {line}: unknown record `{w}` (map, model)")),
             }
         }
         // Uniqueness across rows.
@@ -112,8 +133,25 @@ impl Mapping {
                 ));
             }
         }
+        // Each way a file is looked up once: export by the bench's, import by Spectre's.
+        let mut files: BTreeMap<&str, u32> = BTreeMap::new();
+        let mut spectre: BTreeMap<&str, u32> = BTreeMap::new();
+        for row in &m.models {
+            if let Some(l) = files.insert(&row.path, row.line) {
+                errs.push(format!(
+                    "line {}: model file {} is already mapped on line {l}",
+                    row.line, row.path
+                ));
+            }
+            if let Some(l) = spectre.insert(&row.spectre, row.line) {
+                errs.push(format!(
+                    "line {}: Spectre file {} is already the target of line {l}",
+                    row.line, row.spectre
+                ));
+            }
+        }
         if errs.is_empty() {
-            assert!(m.maps.len() < doc.record_count() as usize);
+            assert!(m.maps.len() + m.models.len() < doc.record_count() as usize);
             Ok(m)
         } else {
             Err(errs)
@@ -129,6 +167,37 @@ impl Mapping {
     pub fn by_virtuoso(&self, lib: &str, cell: &str) -> Option<&MapRow> {
         self.maps.iter().find(|r| r.lib == lib && r.cell == cell)
     }
+}
+
+fn model_row(doc: &Document<'_>, r: u32, f: &[&str], line: u32) -> Result<ModelRow, Vec<String>> {
+    if f.len() != 3 || f[1] != "virtuoso" || f[0].is_empty() || f[2].is_empty() {
+        return Err(vec![format!(
+            "line {line}: `model <file> virtuoso <spectre file>`"
+        )]);
+    }
+    let mut row = ModelRow {
+        path: f[0].to_owned(),
+        spectre: f[2].to_owned(),
+        line,
+        ..ModelRow::default()
+    };
+    let mut errs = Vec::new();
+    for a in doc.attrs(r) {
+        let at = doc.attr_line(a).saturating_sub(1);
+        match (doc.attr_key(a), attr_values(doc, a).as_slice()) {
+            ("section", [from, to]) => {
+                if row.sections.iter().any(|x| x.0 == *from || x.1 == *to) {
+                    errs.push(format!("line {at}: section {from} or {to} mapped twice"));
+                }
+                row.sections.push(((*from).into(), (*to).into()));
+            }
+            (key, v) => errs.push(format!(
+                "line {at}: `{key}` with {} value(s) is not a model attribute (section <from> <to>)",
+                v.len()
+            )),
+        }
+    }
+    if errs.is_empty() { Ok(row) } else { Err(errs) }
 }
 
 fn attr_values<'a>(doc: &'a Document<'_>, a: u32) -> Vec<&'a str> {
@@ -449,6 +518,19 @@ mod tests {
         assert_eq!(r.line, 1);
         assert!(m.by_virtuoso("sky130_fd_pr", "nfet_01v8").is_some());
         assert!(Mapping::parse("").unwrap().maps.is_empty());
+        let m = Mapping::parse(
+            "model ${PDK}/corners.lib virtuoso ${PDK}/corners.scs\n  section tt typical\n",
+        )
+        .unwrap();
+        assert_eq!(
+            m.models,
+            [ModelRow {
+                path: "${PDK}/corners.lib".into(),
+                spectre: "${PDK}/corners.scs".into(),
+                sections: vec![("tt".into(), "typical".into())],
+                line: 1,
+            }]
+        );
     }
 
     #[test]
@@ -480,6 +562,23 @@ mod tests {
                 "both mapped and dropped",
             ),
             ("class c virtuoso_target h\n", "unknown record `class`"),
+            ("model a.lib b.scs\n", "model <file> virtuoso"),
+            (
+                "model a.lib virtuoso b.scs\n  sec x y\n",
+                "not a model attribute",
+            ),
+            (
+                "model a.lib virtuoso b.scs\n  section tt t\n  section ff t\n",
+                "mapped twice",
+            ),
+            (
+                "model a.lib virtuoso b.scs\nmodel a.lib virtuoso c.scs\n",
+                "already mapped",
+            ),
+            (
+                "model a.lib virtuoso b.scs\nmodel c.lib virtuoso b.scs\n",
+                "already the target",
+            ),
             ("map \"a\n", "E028"),
         ] {
             let e = Mapping::parse(bad).expect_err(bad);

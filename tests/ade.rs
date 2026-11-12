@@ -39,14 +39,18 @@ fn design(files: &Files) -> Design {
 
 /// The `.sfyx` export of `tb.shbench` and its notes.
 fn export(files: &Files) -> (String, Notes) {
+    export_mapped(files, &Mapping::default())
+}
+
+/// [`export`] through mapping `m`.
+fn export_mapped(files: &Files, m: &Mapping) -> (String, Notes) {
     let d = design(files);
     let tb = d.find("tb.shbench").expect("loaded");
     let opts = ExportOptions {
         producer: "test".into(),
         ..ExportOptions::default()
     };
-    let e =
-        virtuoso::export(&d, &[tb], &Mapping::default(), &opts).unwrap_or_else(|e| panic!("{e:?}"));
+    let e = virtuoso::export(&d, &[tb], m, &opts).unwrap_or_else(|e| panic!("{e:?}"));
     (e.sfyx, e.notes)
 }
 
@@ -65,13 +69,13 @@ fn maestro(text: &str) -> Vec<Record> {
 
 /// The bench an import of `text` writes (`existing`: the files it merges with).
 fn import(text: &str, existing: &Files) -> (String, Notes) {
-    let imp = virtuoso::import(
-        text,
-        existing,
-        &Mapping::default(),
-        &ImportOptions::default(),
-    )
-    .unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+    import_mapped(text, existing, &Mapping::default())
+}
+
+/// [`import`] through mapping `m`.
+fn import_mapped(text: &str, existing: &Files, m: &Mapping) -> (String, Notes) {
+    let imp = virtuoso::import(text, existing, m, &ImportOptions::default())
+        .unwrap_or_else(|e| panic!("{e:?}\n{text}"));
     let tb = imp
         .files
         .iter()
@@ -465,7 +469,7 @@ fn a_deck_block_with_title_and_negative_dc_maps_line_by_line() {
             (
                 "needs_review:montecarlo",
                 "code netlist line 4: `.dc Vdd 0.8 0.8 1 sweep monte=500`: an HSPICE Monte \
-                 Carlo sweep; a `montecarlo` record carries it"
+                 Carlo sweep; a `montecarlo` record carries it; its analysis does not map"
             ),
         ],
         "{}",
@@ -490,6 +494,141 @@ fn a_deck_block_with_title_and_negative_dc_maps_line_by_line() {
     let t = tables(&got);
     assert_eq!(
         t["code netlist"], "netlist spice |.lib ${PDK}/models.lib tt |.dc Vsw -0.2 0.2 0.1m",
+        "{got}"
+    );
+}
+
+/// A block whose only analysis line is a `monte=` sweep is still the analysis block: its
+/// model file and the swept analysis map, the Monte Carlo is one row (the block was
+/// refused whole, `no maestro form`, before).
+#[test]
+fn a_monte_carlo_line_alone_keeps_the_block() {
+    for (deck, analysis, rest) in [
+        (
+            ".dc Vdd 0.8 0.8 1 sweep monte=500",
+            Some(r#"analysis('dc ?dev "/Vdd" ?param "dc" ?start "0.8" ?stop "0.8" ?step "1")"#),
+            "",
+        ),
+        (".dc monte=500", None, "; its analysis does not map"),
+    ] {
+        let bench = format!(
+            "schemify 1 shbench\n\ncode netlist spice\n  | .title tb_mirror\n\
+             \x20 | .lib /abs/models/top.lib some_section\n  | {deck}\n"
+        );
+        let (_, notes) = export(&project(&bench));
+        let rows: Vec<(&str, &str)> = notes
+            .rows
+            .iter()
+            .filter(|n| n.class.ends_with(":code") || n.class.ends_with(":montecarlo"))
+            .map(|n| (n.class.as_str(), n.detail.as_str()))
+            .collect();
+        let mc = format!(
+            "code netlist line 3: `{deck}`: an HSPICE Monte Carlo sweep; a `montecarlo` \
+             record carries it{rest}"
+        );
+        assert_eq!(
+            rows,
+            [
+                (
+                    "dropped:code",
+                    "code netlist line 1: `.title tb_mirror`: Maestro has no title"
+                ),
+                ("needs_review:montecarlo", mc.as_str()),
+            ],
+            "{}",
+            notes.text()
+        );
+        let d = design(&project(&bench));
+        let e = virtuoso::export(
+            &d,
+            &[d.find("tb.shbench").unwrap()],
+            &Mapping::default(),
+            &ExportOptions::default(),
+        )
+        .unwrap();
+        let ocn = &e.ocean.iter().find(|f| f.0.ends_with(".ocn")).unwrap().1;
+        assert!(
+            ocn.contains(r#"modelFile('("/abs/models/top.lib" "some_section"))"#),
+            "{ocn}"
+        );
+        assert_eq!(
+            analysis.is_some_and(|a| ocn.contains(a)),
+            analysis.is_some(),
+            "{ocn}"
+        );
+    }
+}
+
+/// An `interop.map` `model` row: the deck's and the corners' HSPICE file go to Maestro as
+/// the Spectre file (a section renamed by `section`, the others kept), and back; a file
+/// no row names that is not `.scs` is reported, a `.scs` one is not.
+#[test]
+fn a_model_row_swaps_the_hspice_file_for_spectres() {
+    let m = Mapping::parse(
+        "model ${KIT}/hspice/corners.lib virtuoso ${KIT}/spectre/corners.scs\n\
+         \x20 section tt_hs tt\n",
+    )
+    .unwrap();
+    let bench = "schemify 1 shbench\n\ncorner ss\n  lib ${KIT}/hspice/corners.lib ss\n\
+                 \x20 lib other.lib ss\n  include own.scs\n\ncode netlist spice\n\
+                 \x20 | .lib ${KIT}/hspice/corners.lib tt_hs\n  | .tran 1n 10n\n";
+    let (text, notes) = export_mapped(&project(bench), &m);
+    let models: Vec<String> = maestro(&text)
+        .iter()
+        .filter(|r| r.tag == "model")
+        .map(|r| {
+            let mut s = String::new();
+            sfyx::write_record(r, &mut s);
+            s
+        })
+        .collect();
+    assert_eq!(
+        models,
+        [
+            r#"("model" "" "$KIT/spectre/corners.scs" "tt")"#,
+            r#"("model" "ss" "$KIT/spectre/corners.scs" "ss")"#,
+            r#"("model" "ss" "other.lib" "ss")"#,
+            r#"("model" "ss" "own.scs" "")"#,
+        ]
+        .map(|s| format!("{s}\n"))
+    );
+    let rows: Vec<&str> = notes
+        .rows
+        .iter()
+        .filter(|n| n.class.ends_with(":model"))
+        .map(|n| n.detail.as_str())
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            "model file other.lib: not a Spectre file (.scs) and no interop.map `model` row \
+          names one; sent as written"
+        ],
+        "{}",
+        notes.text()
+    );
+    let d = design(&project(bench));
+    let e = virtuoso::export(
+        &d,
+        &[d.find("tb.shbench").unwrap()],
+        &m,
+        &ExportOptions::default(),
+    )
+    .unwrap();
+    let ocn = &e.ocean.iter().find(|f| f.0.ends_with(".ocn")).unwrap().1;
+    assert!(
+        ocn.contains(r#"modelFile('("$KIT/spectre/corners.scs" "tt") "#),
+        "{ocn}"
+    );
+    // Back without the stash: the row's file and section again.
+    let (got, _) = import_mapped(&strip_stash(&text), &Files::new(), &m);
+    let t = tables(&got);
+    assert_eq!(
+        t["code netlist"], "netlist spice |.lib ${KIT}/hspice/corners.lib tt_hs |.tran 1e-11 10n",
+        "{got}"
+    );
+    assert_eq!(
+        t["corner ss"], "ss lib=${KIT}/hspice/corners.lib,ss lib=other.lib,ss include=own.scs",
         "{got}"
     );
 }

@@ -108,6 +108,7 @@ pub fn export(
                 ci,
                 &plan.lib[ci],
                 |p| inst_info(d, &plan, m, ci, p),
+                m,
                 &mut notes,
             );
             super::config::bind_test(&d.cells[ci], &mut b.records);
