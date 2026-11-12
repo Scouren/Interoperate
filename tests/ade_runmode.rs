@@ -149,6 +149,42 @@ fn diff(a: &str, b: &str) -> Vec<(String, String)> {
         .collect()
 }
 
+fn rec(tag: &str, f: &[&str]) -> Record {
+    Record::new(tag, f.iter().map(|x| sfyx::s(x)).collect())
+}
+
+/// A dump of one maestro view (test T1 of `rc`, setup `xml`, then `recs`) imported into a
+/// fresh project: its files and the import's notes.
+fn imported(xml: &str, recs: Vec<Record>) -> (Files, interop::notes::Notes) {
+    let mut dump = vec![
+        Record::new("sfyx", vec![sfyx::i(1), sfyx::s("t")]),
+        rec("lib", &[LIB]),
+        rec("cell", &["rc", "design"]),
+        Record::new(
+            "cv",
+            vec![sfyx::s("schematic"), sfyx::s("schematic"), sfyx::i(160000)],
+        ),
+        rec("maestro", &["T1", LIB, "rc", "schematic", "spectre"]),
+        Record::new(
+            "maesdb",
+            vec![sfyx::text(xml), sfyx::Value::List(Vec::new())],
+        ),
+    ];
+    dump.extend(recs);
+    dump.push(rec("end", &[]));
+    let mut files = Files::new();
+    files.insert("schemify.project".into(), b"schemify 1 project\n".to_vec());
+    let imp = virtuoso::import(
+        &sfyx::write(&dump),
+        &files,
+        &Mapping::default(),
+        &ImportOptions::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e:?}"));
+    files.extend(imp.files);
+    (files, imp.notes)
+}
+
 #[test]
 #[cfg_attr(
     not(feature = "cadence-records"),
@@ -462,45 +498,18 @@ fn run_modes_without_a_stored_setup_are_reported() {
 #[test]
 fn a_bound_spec_is_a_goal_only_in_the_cadence_records_format() {
     let xml = "<?xml version=\"1.0\"?>\n<setupdb version=\"6\">maesdb\n\t<active>Active Setup\n\t\t<specs>\n\t\t\t<spec>T1.vmax\n\t\t\t\t<testname>T1</testname>\n\t\t\t\t<resname>vmax</resname>\n\t\t\t\t<specType>gt</specType>\n\t\t\t\t<min>0.5</min>\n\t\t\t</spec>\n\t\t</specs>\n\t\t<runoptions>\n\t\t\t<mode>Global Optimization\n\t\t\t\t<runoption>numpoints\n\t\t\t\t\t<value>50</value>\n\t\t\t\t</runoption>\n\t\t\t</mode>\n\t\t</runoptions>\n\t</active>\n</setupdb>\n";
-    let r = |tag: &str, f: &[&str]| Record::new(tag, f.iter().map(|x| sfyx::s(x)).collect());
-    let dump = sfyx::write(&[
-        Record::new("sfyx", vec![sfyx::i(1), sfyx::s("t")]),
-        r("lib", &[LIB]),
-        r("cell", &["rc", "design"]),
-        Record::new(
-            "cv",
-            vec![sfyx::s("schematic"), sfyx::s("schematic"), sfyx::i(160000)],
-        ),
-        r("maestro", &["T1", LIB, "rc", "schematic", "spectre"]),
-        Record::new(
-            "maesdb",
-            vec![sfyx::text(xml), sfyx::Value::List(Vec::new())],
-        ),
-        r("maefile", &["maestro.sdb", "YWI="]),
-        r("output", &["vmax", "point", "ymax(VT(\"/out\"))"]),
-        r("spec", &["vmax", "gt", "0.5"]),
-        r("end", &[]),
-    ]);
-    let mut files = Files::new();
-    files.insert("schemify.project".into(), b"schemify 1 project\n".to_vec());
-    let imp = virtuoso::import(
-        &dump,
-        &files,
-        &Mapping::default(),
-        &ImportOptions::default(),
-    )
-    .unwrap_or_else(|e| panic!("{e:?}"));
-    let b = imp
-        .files
-        .iter()
-        .find(|f| f.0 == BENCH)
-        .expect("the bench")
-        .1
-        .clone();
-    let b = String::from_utf8(b).unwrap();
+    let (files, notes) = imported(
+        xml,
+        vec![
+            rec("maefile", &["maestro.sdb", "YWI="]),
+            rec("output", &["vmax", "point", "ymax(VT(\"/out\"))"]),
+            rec("spec", &["vmax", "gt", "0.5"]),
+        ],
+    );
+    let b = bench(&files);
     schemify_format::parse(b.as_bytes()).unwrap_or_else(|e| panic!("{e:?}\n{b}"));
     assert!(b.contains("  vmaefile maestro.sdb text ab\n"), "{b}");
-    let t = imp.notes.text();
+    let t = notes.text();
     if cfg!(feature = "cadence-records") {
         assert!(
             block(&b, "optimize global").contains(&"  goal vmax gt 0.5".to_owned()),
@@ -513,4 +522,26 @@ fn a_bound_spec_is_a_goal_only_in_the_cadence_records_format() {
             "{t}"
         );
     }
+}
+
+/// A Maestro sweep `start:step:stop` that is also an optimizer range (live `l5_runmode`):
+/// the bench sweeps its points, and while they are the same an edit elsewhere leaves the
+/// var as Maestro has it; sent as the comma list, it replaced the range.
+#[test]
+fn a_range_var_goes_back_in_its_maestro_form() {
+    let xml = "<?xml version=\"1.0\"?>\n<setupdb version=\"6\">maesdb\n\t<active>Active Setup\n\t\t<vars>\n\t\t\t<var>C\n\t\t\t\t<value>1n:1n:3n</value>\n\t\t\t</var>\n\t\t</vars>\n\t\t<runoptions>\n\t\t\t<mode>Monte Carlo Sampling\n\t\t\t\t<runoption>mcnumpoints\n\t\t\t\t\t<value>7</value>\n\t\t\t\t</runoption>\n\t\t\t</mode>\n\t\t\t<mode>Local Optimization\n\t\t\t\t<runoption>effort\n\t\t\t\t\t<value>fine</value>\n\t\t\t\t</runoption>\n\t\t\t</mode>\n\t\t</runoptions>\n\t</active>\n</setupdb>\n";
+    let (files, _) = imported(xml, vec![rec("var", &["C", "1n:1n:3n", ""])]);
+    let b = bench(&files);
+    assert!(b.contains("sweep C\n  var C\n  lin 1e-9 3e-9 3\n"), "{b}");
+    let files = edited(&files, |b| b.replace("  samples 7\n", "  samples 9\n"));
+    let (text, notes) = export(&files, BENCH);
+    assert!(records(&text, "var").is_empty(), "{text}\n{}", notes.text());
+    assert!(sent_xml(&text).contains("<value>1n:1n:3n</value>"));
+    // Other points go as their list.
+    let files = edited(&files, |b| {
+        b.replace("  lin 1e-9 3e-9 3\n", "  lin 1e-9 3e-9 5\n")
+    });
+    let (text, _) = export(&files, BENCH);
+    let var = &records(&text, "var")[0];
+    assert_eq!(var.str(1).unwrap(), "1e-9,1.5e-9,2e-9,2.5e-9,3e-9");
 }

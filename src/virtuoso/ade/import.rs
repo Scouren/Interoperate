@@ -1174,7 +1174,7 @@ fn import_test(
 /// The points of ADE's `start:step:stop` sweep form (`"0.81:0.09:0.99"`), `None` for any
 /// other text or a step that does not land on `stop` within 1e-9 of a step. The points are
 /// [`grid`]'s, so the sweep reads back as `lin start stop n`.
-fn colon_points(v: &str) -> Option<Vec<String>> {
+pub(super) fn colon_points(v: &str) -> Option<Vec<String>> {
     let f: Vec<f64> = v
         .split(':')
         .map(|x| ael::fold_numeric(x.trim())?.parse().ok())
