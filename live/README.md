@@ -87,6 +87,28 @@ your cells' dumps can contain PDK parameter names; remove what you cannot share.
 If cargo and Virtuoso are on different machines, run the steps one by one (`--step`) with the
 work directory at the same absolute path on both, for example on a shared disk.
 
+## From your own machine (`host.sh`)
+
+`host.sh` runs the kit on a Virtuoso host you reach over ssh (`SFY_HOST`, its ssh name):
+
+```sh
+SFY_HOST=<host> live/host.sh sync          # HEAD (committed files only) to ~/sfytest/head/src
+SFY_HOST=<host> live/host.sh build         # schemify-interop into the host's ~/.local/bin
+SFY_HOST=<host> live/host.sh kit [flags]   # test.sh there; report.md and summary.txt come back
+SFY_HOST=<host> live/host.sh check <name>  # checks/run.sh <name>
+```
+
+`sync` also ships the dependencies vendored here and a `.cargo/config.toml` for the host copy
+only, so the host builds offline (`--locked` holds: it is a source replacement, not a
+`[patch]`) and needs no access to the private git dependencies. It ships an untracked
+`live/local/` too. `kit` runs from `~/sfytest/head` with `--work ~/sfytest/head/work
+--cdslib ~/sfytest/cds.lib --env ~/sfytest/env.csh`. Given `--pdk`, `--lib`, `--cell`,
+`--callbacks` or `--project` it fetches nothing and prints only the counts.
+
+Every subcommand takes a local lock, so only one ssh session reaches the host at a time. It
+waits while the host's 1-minute load is 16 or more, and runs under `nice 19` with
+`SFY_HOST_JOBS` cargo jobs (default 4). The header of `host.sh` lists the rest.
+
 ## The checks
 
 | Check | Passes when |
