@@ -1029,13 +1029,15 @@ pub(super) fn spectre_format(
     let has_model = params
         .iter()
         .any(|p| p.name == "model" && (!p.default.is_empty() || other.contains(&p.name)));
-    let master = if has_model {
-        "{model}".to_owned()
-    } else {
-        si.str("componentName")
-            .filter(|s| !s.is_empty() && *s != "nil")
-            .unwrap_or(&c.name)
-            .to_owned()
+    let comp = si
+        .str("componentName")
+        .filter(|s| !s.is_empty() && *s != "nil");
+    let master = match (has_model, comp) {
+        // An empty model names no master: the netlister writes the component name (analogLib
+        // cap, model "": `C0 (out 0) capacitor`; an empty master was SFE-23, live a_drive).
+        (true, Some(comp)) => format!("{{model != \"\" ? model : \"{comp}\"}}"),
+        (true, None) => "{model}".to_owned(),
+        (false, comp) => comp.unwrap_or(&c.name).to_owned(),
     };
     let mut t = format!("{{name}} ({pins}) {master}");
     for (k, cn, num) in inst_params(si, params) {

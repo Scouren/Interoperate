@@ -138,7 +138,7 @@ stext 45 -20 R0 {name}
 schemify 1 shprim
   provenance "virtuoso analogLib/res"
   vibox -20 0 20 60
-  vsym 4b98ec95fbc6a6d5
+  vsym 196e648befcd117e
 
 pin PLUS inout 0 0
   vplabel none
@@ -219,7 +219,7 @@ param hrc ""
 
 impl spice spice
   format spice "R{name} {PLUS} {MINUS} {r}{m != \"\" ? \" m=\" + m : \"\"}"
-  format spectre "{name} ({PLUS} {MINUS}) {model} r={r}{l != \"\" ? \" l=\" + l : \"\"}{w != \"\" ? \" w=\" + w : \"\"}{resform != \"\" ? \" resform=\" + resform : \"\"}{m != \"\" ? \" m=\" + m : \"\"}{scale != \"\" ? \" scale=\" + scale : \"\"}{trise != \"\" ? \" trise=\" + trise : \"\"}{tc1 != \"\" ? \" tc1=\" + tc1 : \"\"}{tc2 != \"\" ? \" tc2=\" + tc2 : \"\"}{isnoisy != \"\" ? \" isnoisy=\" + isnoisy : \"\"}{c != \"\" ? \" c=\" + c : \"\"}{tc1r != \"\" ? \" tc1r=\" + tc1r : \"\"}{tc2r != \"\" ? \" tc2r=\" + tc2r : \"\"}{tc1c != \"\" ? \" tc1c=\" + tc1c : \"\"}{tc2c != \"\" ? \" tc2c=\" + tc2c : \"\"}{scaler != \"\" ? \" scaler=\" + scaler : \"\"}{scalec != \"\" ? \" scalec=\" + scalec : \"\"}{ac != \"\" ? \" rac=\" + ac : \"\"}{dtemp != \"\" ? \" dtemp=\" + dtemp : \"\"}"
+  format spectre "{name} ({PLUS} {MINUS}) {model != \"\" ? model : \"resistor\"} r={r}{l != \"\" ? \" l=\" + l : \"\"}{w != \"\" ? \" w=\" + w : \"\"}{resform != \"\" ? \" resform=\" + resform : \"\"}{m != \"\" ? \" m=\" + m : \"\"}{scale != \"\" ? \" scale=\" + scale : \"\"}{trise != \"\" ? \" trise=\" + trise : \"\"}{tc1 != \"\" ? \" tc1=\" + tc1 : \"\"}{tc2 != \"\" ? \" tc2=\" + tc2 : \"\"}{isnoisy != \"\" ? \" isnoisy=\" + isnoisy : \"\"}{c != \"\" ? \" c=\" + c : \"\"}{tc1r != \"\" ? \" tc1r=\" + tc1r : \"\"}{tc2r != \"\" ? \" tc2r=\" + tc2r : \"\"}{tc1c != \"\" ? \" tc1c=\" + tc1c : \"\"}{tc2c != \"\" ? \" tc2c=\" + tc2c : \"\"}{scaler != \"\" ? \" scaler=\" + scaler : \"\"}{scalec != \"\" ? \" scalec=\" + scalec : \"\"}{ac != \"\" ? \" rac=\" + ac : \"\"}{dtemp != \"\" ? \" dtemp=\" + dtemp : \"\"}"
   format cdl "R{name} {PLUS} {MINUS} R={r} $[RP]"
 
 poly 0 60 0 48 -10 45 10 39 -10 33 10 27 -10 21 10 15 0 12 0 0

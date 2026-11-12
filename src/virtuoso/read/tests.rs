@@ -67,6 +67,42 @@ fn netlisting() -> impl Strategy<Value = (Vec<String>, Vec<(String, String, bool
         })
 }
 
+/// analogLib cap's simInfo (a componentName, model passed in otherParameters, model ""):
+/// Spectre's netlister writes the component name for an empty model (`C0 (out 0)
+/// capacitor`; an empty master was SFE-23, live a_drive), and the format reads back.
+#[test]
+fn an_empty_model_netlists_the_component_name() {
+    let pins = ["PLUS".to_owned(), "MINUS".to_owned()];
+    let head = vec![
+        ("componentName".to_owned(), SimVal::Str("capacitor".into())),
+        (
+            "otherParameters".to_owned(),
+            SimVal::List(vec!["model".into()]),
+        ),
+    ];
+    let si = siminfo("spectre", head, &pins, &[("c".into(), "c".into())]);
+    let mut model = param("model", true);
+    model.default.clear();
+    let params = [model, param("c", false)];
+    let rows: Vec<PinRow> = pins.iter().map(|p| pin(p)).collect();
+    let t = spectre_format(
+        &DCell::default(),
+        &si,
+        &params,
+        &rows,
+        &mut Notes::default(),
+    );
+    assert_eq!(
+        t,
+        r#"{name} ({PLUS} {MINUS}) {model != "" ? model : "capacitor"} c={c}"#
+    );
+    let kinds: Vec<(String, String)> = params
+        .iter()
+        .map(|p| (p.name.clone(), p.kind.clone()))
+        .collect();
+    assert_eq!(spectre_siminfo(&t, &pins, &kinds), Some(si));
+}
+
 proptest! {
     /// Import's spectre format of a simInfo reads back, through export's reverse rule, as
     /// the same simInfo (§6.3): master, terminal order, parameters, renames, and the
