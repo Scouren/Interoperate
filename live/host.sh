@@ -8,8 +8,8 @@
 #                                              offline; installs ~/.local/bin/schemify-interop
 #   SFY_HOST=<host> live/host.sh kit [flags…]  live/test.sh in ~/sfytest/head/work with
 #                                              --cdslib ~/sfytest/cds.lib --env ~/sfytest/env.csh
-#   SFY_HOST=<host> live/host.sh check <name>  live/checks/run.sh <name>, its work directory
-#                                              ~/sfytest/head/checks
+#   SFY_HOST=<host> live/host.sh check <name>  live/checks/run.sh <name> with the installed CLI,
+#                                              its work directory ~/sfytest/head/checks
 #
 # One ssh at a time: each subcommand holds a local lock for its whole run and exits 2 when
 # another holds it. The host's login shell is csh, so the remote half is a script on the
@@ -85,14 +85,18 @@ flock /tmp/\$(id -un)-sfy-run.lock nice -n 19 bash src/live/test.sh --work "\$HO
   --cdslib "\$HOME/sfytest/cds.lib" --env "\$HOME/sfytest/env.csh" $args> kit.log 2>&1 || s=\$?
 echo "host.sh: test.sh exit \$s (log: ~/sfytest/head/kit.log, sfylive-run.log)"
 r=work/out/report.md
-[ $pdk = 1 ] || grep '^Verdict:' \$r || echo "host.sh: no report"
-for w in PASS FAIL WARN SKIP INFO; do printf '%s %s  ' \$w "\$(grep -c "^| [^|]* | \$w |" \$r 2>/dev/null)"; done; echo
+if [ -f \$r ]; then
+  [ $pdk = 1 ] || grep '^Verdict:' \$r
+  for w in PASS FAIL WARN SKIP INFO; do printf '%s %s  ' \$w "\$(grep -c "^| [^|]* | \$w |" \$r)"; done; echo
+else
+  echo "host.sh: no report"
+fi
 exit \$s
 EOF
     if [[ $pdk == 0 ]]; then
       dest="${SFY_HOST_OUT:-$(mktemp -d)}"
       mkdir -p "$dest"
-      remote <<< 'cd work && tar -c -f - out/report.md summary.txt' | tar -x -f - -C "$dest" \
+      remote <<< 'cd work && tar -c -f - out/report.md summary.txt 2>/dev/null' | tar -x -f - -C "$dest" \
         || echo "host.sh: the fetch was incomplete" >&2
       echo "host.sh: $dest/out/report.md, $dest/summary.txt"
     fi
@@ -106,7 +110,7 @@ w="\$HOME/sfytest/head/checks"
 mkdir -p "\$w"
 [ -f "\$w/cds.lib" ] || cp "\$HOME/sfytest/cds.lib" "\$w/cds.lib"
 schemify-interop install-skill "\$w" > /dev/null
-SFYCHECK_WORK="\$w" nice -n 19 bash src/live/checks/run.sh $(printf '%q' "$2")
+SFYCHECK_WORK="\$w" SFYCHECK_CLI="\$HOME/.local/bin/schemify-interop" nice -n 19 bash src/live/checks/run.sh $(printf '%q' "$2")
 EOF
     ;;
   *) echo "usage: SFY_HOST=<host> $0 sync | build | kit [flags…] | check <name>" >&2; exit 2 ;;
