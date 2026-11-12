@@ -2453,9 +2453,10 @@ fn a_cell_past_the_param_table_imports_and_loads() {
 /// Lane A (gaps round 2): the Spectre netlists Schemify makes of a maestro dump imported
 /// into a fresh project (`<dump>.proj`): `SFY_A_DUMP` the `.sfyx` (absolute), `SFY_A_CELL`
 /// the bench file it gives, `SFY_A_OUT` a directory that gets `<test>.scs` per `test`
-/// record, the bench with only that test's code blocks (Schemify runs have no test
-/// dimension yet, run.md §2), netlisted by the `schemify` on PATH (`<test>.err` when it
-/// cannot). Run by `live/checks/a_drive.sh`, which runs Spectre on them on the Virtuoso host.
+/// record (without any, one of the whole bench), the bench with only that test's code
+/// blocks (Schemify runs have no test dimension yet, run.md §2), netlisted by the `schemify`
+/// on PATH (`<test>.err` when it cannot). Run by `live/checks/a_drive.sh`, which runs
+/// Spectre on them on the Virtuoso host.
 #[test]
 #[ignore = "run by live/checks/a_drive.sh"]
 fn a_dump_netlist() {
@@ -2482,7 +2483,7 @@ fn a_dump_netlist() {
             }
         }
     }
-    let tests: Vec<(String, Vec<String>)> = blocks
+    let mut tests: Vec<(String, Vec<String>)> = blocks
         .iter()
         .filter(|b| b.0.starts_with("test "))
         .map(|b| {
@@ -2494,7 +2495,15 @@ fn a_dump_netlist() {
             (b.0[5..].to_owned(), codes)
         })
         .collect();
-    assert!(!tests.is_empty(), "{cell}: no test records");
+    // The default build's bench has no `test` records, only the mapped test: one netlist
+    // of the whole bench, named after its first code block.
+    if tests.is_empty() {
+        let codes: Vec<String> = blocks
+            .iter()
+            .filter_map(|b| b.0.strip_prefix("code ").map(str::to_owned))
+            .collect();
+        tests.push((codes.first().cloned().unwrap_or("bench".into()), codes));
+    }
     for (t, codes) in &tests {
         let text: String = blocks
             .iter()
