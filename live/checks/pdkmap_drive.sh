@@ -52,11 +52,11 @@ ssh "$host" "env SFYCHECK_KEEP=1 SFYCHECK_IL=\$HOME/$work/schemify_pdkmap.il bas
 cat "$tmp/run.txt"
 cat >"$tmp/want.sfyx" <<WANT
 ("sfyx" 1 "schemify.il 1")
-("cdfnames" "$lib" "nfoo" "nfoo" ("D" "G" "S" "B") ("model" "w" "l" "nf" "m") ("D" "G" "S"))
-("cdfnames" "$lib" "nfoo_b" "nfoo" ("D" "G" "S" "B") ("model" "w" "l" "nf" "m") ("B" "D" "G" "S"))
-("cdfnames" "$lib" "nocdf" "" () () ("A" "B"))
-("cdfnames" "$lib" "pbar" "pbar" ("D" "G" "S") ("model" "w" "l") ("D" "G" "S"))
-("cdfnames" "$lib" "rbaz" "rbaz" ("PLUS" "MINUS") ("model" "r" "m") ("MINUS" "PLUS"))
+("cdfnames" "$lib" "nfoo" "nfoo" ("D" "G" "S" "B") ("model" "w" "l" "nf" "m") ("D" "G" "S") ())
+("cdfnames" "$lib" "nfoo_b" "nfoo" ("D" "G" "S" "B") ("model" "w" "l" "nf" "m") ("B" "D" "G" "S") ())
+("cdfnames" "$lib" "nocdf" "" () () ("A" "B") ())
+("cdfnames" "$lib" "pbar" "pbar" ("D" "G" "S") ("model" "w" "l") ("D" "G" "S") ())
+("cdfnames" "$lib" "rbaz" "rbaz" ("PLUS" "MINUS") ("model" "value" "m") ("MINUS" "PLUS") (("r" "value")))
 ("end")
 WANT
 same() { diff "$1" "$2" >&2 && echo true || echo false; }
@@ -89,7 +89,7 @@ map fkit:nfoo virtuoso $lib nfoo_b
 map fkit:rbaz virtuoso $lib rbaz
   pin p PLUS
   pin n MINUS
-  param r r
+  param r value
   param m m
 WANT
 verdict "pdk-map writes the mock's map" "$(same "$tmp/want.map" "$tmp/interop.map")"

@@ -1,11 +1,13 @@
 ;; sfy_pdkmap.il: SfyCdfNames, the names a PDK library's cells netlist by, for
 ;; `schemify-interop pdk-map` (interop spec 8.2), which maps a kit's scanned cells onto
 ;; them. Per cell, one record:
-;;   ("cdfnames" lib cell model (termOrder ...) (param ...) (terminal ...))
+;;   ("cdfnames" lib cell model (termOrder ...) (param ...) (terminal ...) ((netlist cdf) ...))
 ;; model: the base CDF's model parameter default; termOrder: the spectre simInfo's, in
 ;; order; param: the base CDF's parameter names, in CDF order; terminal: the symbol's
 ;; terminal names, sorted. A cell without CDF, model parameter, spectre termOrder or symbol
-;; gives "" or (). Names only: no default but the model's (itself a name), no geometry.
+;; gives "" or (). The last field is the spectre simInfo's propMapping: a netlisted name
+;; and the CDF parameter it comes from (a kit resistor netlists r from value). Names only:
+;; no default but the model's (itself a name), no geometry.
 
 ;; Dumps every cell of each library of libs (in that order, cells sorted) to path. Writes
 ;; <path>.log; t on PASS.
@@ -33,13 +35,15 @@
 ;; The cdfnames record of lib/cell.
 (procedure (SfyCdfNamesCell port lib cell)
   (let ((cdf (cdfGetBaseCellCDF (ddGetObj lib cell))) (model nil) (order nil) (cv nil)
-        (terms nil))
+        (terms nil) (pm nil))
     (when cdf
       (setq model (cdfFindParamByName cdf "model"))
       (foreach s (SfySimInfoFields (getSGq cdf simInfo))
         (when (equal (car s) "spectre")
           (foreach kv (cadr s)
-            (when (equal (car kv) "termOrder") (setq order (cadr kv)))))))
+            (when (equal (car kv) "termOrder") (setq order (cadr kv)))
+            (when (and (equal (car kv) "propMapping") (listp (cadr kv)))
+              (setq pm (setof x (cadr kv) (and (listp x) (stringp (car x))))))))))
     (when (ddGetObj lib cell "symbol")
       (setq cv (dbOpenCellViewByType lib cell "symbol" nil "r"))
       (when cv
@@ -49,5 +53,6 @@
       (list lib cell (if model (SfyAtomStr (getSGq model defValue)) "")
         (if (listp order) order (list order))
         (and cdf (getSGq (getSGq cdf parameters) name))
-        terms))
+        terms
+        pm))
     (SfyCount "cdfnames")))

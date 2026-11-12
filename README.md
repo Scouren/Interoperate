@@ -221,8 +221,9 @@ A `.shbench` exports as the testbench schematic plus a maestro view with one tes
 | core sources, passives, ammeters | their analogLib cells (`vdc`, `idc`, `cap`, `iprobe`, …; `--core-cells` keeps the `schemify_core` mirrors); `dc {VGS} ac 1` → `vdc` `VGS`, `acm` `1` |
 
 Each bench also gets an OCEAN script, `ocean/<cell>.ocn` beside the `.sfyx`, that runs the same
-setup headless and prints every output to `<cell>/<output>.txt` (sweeps as `paramAnalysis`; an
-output with `vs <other output>` is also printed as a `waveVsWave` plot):
+setup headless and prints every output to `<cell>/<output>.txt` (one run per enabled corner,
+under `<cell>/<corner>/`, when there are several; sweeps as `paramAnalysis`; an output with
+`vs <other output>` is also printed as a `waveVsWave` plot):
 
 ```
 SfyImport("/abs/ex.sfyx")                      ; in the CIW

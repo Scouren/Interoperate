@@ -116,6 +116,8 @@ pub struct Vcell {
     pub params: Vec<String>,
     /// The symbol's terminal names.
     pub terms: Vec<String>,
+    /// The spectre simInfo propMapping: (netlisted name, CDF parameter).
+    pub prop_map: Vec<(String, String)>,
 }
 
 impl Vcell {
@@ -196,7 +198,10 @@ pub fn read_dump(text: &str) -> Result<Vec<Vcell>, String> {
                 r.line, r.tag
             ));
         }
-        r.arity(6).map_err(at)?;
+        // A dump without propMapping (written before it was dumped) has six fields.
+        if r.fields.len() != 7 {
+            r.arity(6).map_err(at)?;
+        }
         let names = |i: usize| -> Result<Vec<String>, String> {
             r.list(i)
                 .map_err(at)?
@@ -212,6 +217,19 @@ pub fn read_dump(text: &str) -> Result<Vec<Vcell>, String> {
             order: names(3)?,
             params: names(4)?,
             terms: names(5)?,
+            prop_map: match r.fields.get(6) {
+                None => Vec::new(),
+                Some(_) => r
+                    .list(6)
+                    .map_err(at)?
+                    .iter()
+                    .map(|p| match p.items() {
+                        [a, b] => Some((a.as_str()?.to_owned(), b.as_str()?.to_owned())),
+                        _ => None,
+                    })
+                    .collect::<Option<_>>()
+                    .ok_or_else(|| format!("line {}: field 7 holds a non-pair", r.line))?,
+            },
         });
     }
     Ok(out)
@@ -345,12 +363,24 @@ pub fn map(lib: &str, scan: &[Scanned], kit: &[Vcell]) -> Result<(String, Notes)
             text.push_str(&format!("  pin {} {}\n", word(p), word(t)));
         }
         let mut unshared = Vec::new();
+        let mut mapped = Vec::new();
         for p in &s.params {
+            // The CDF parameter of that name, else the one its propMapping netlists as it
+            // (a kit poly resistor netlists r from value, s from ser).
             let v = best
                 .params
                 .iter()
                 .find(|v| *v == p)
-                .or_else(|| best.params.iter().find(|v| v.eq_ignore_ascii_case(p)));
+                .or_else(|| best.params.iter().find(|v| v.eq_ignore_ascii_case(p)))
+                .or_else(|| {
+                    let (_, c) = best
+                        .prop_map
+                        .iter()
+                        .find(|(n, _)| n.eq_ignore_ascii_case(p))?;
+                    let v = best.params.iter().find(|v| *v == c)?;
+                    mapped.push(format!("{p}->{v}"));
+                    Some(v)
+                });
             // Matched through the netlist name, the two `model` values differ by the
             // cell's prefix (`nfet_01v8` against `sky130_fd_pr__nfet_01v8`): never crossed.
             let by_netlist_name = !best.model.eq_ignore_ascii_case(&s.name);
@@ -374,6 +404,9 @@ pub fn map(lib: &str, scan: &[Scanned], kit: &[Vcell]) -> Result<(String, Notes)
                 "; {} in micrometres (D14: a plain default of 1e-3 or more): scale 1e-6",
                 s.micro.join(" ")
             ));
+        }
+        if !mapped.is_empty() {
+            why.push_str(&format!("; through its propMapping: {}", mapped.join(" ")));
         }
         if !unshared.is_empty() {
             why.push_str(&format!("; not in its CDF: {}", unshared.join(" ")));
@@ -419,6 +452,7 @@ mod tests {
             order: v(order),
             params: v(&["model", "W", "l"]),
             terms: v(terms),
+            prop_map: Vec::new(),
         }
     }
 
@@ -462,6 +496,26 @@ mod tests {
         assert_eq!(
             notes.text(),
             "needs_review:unmapped\tk:tied\ta/tied's termOrder (D G S S) names a terminal twice: two pins on one terminal\n"
+        );
+    }
+
+    /// A scanned (netlisted) param name the CDF holds under another name pairs through the
+    /// cell's spectre propMapping (a kit poly resistor: r from value).
+    #[test]
+    fn a_netlist_name_pairs_through_prop_mapping() {
+        let two = ["PLUS", "MINUS"];
+        let mut res = vc("a", "rpoly", "rpoly", &two, &two);
+        res.params = ["model", "value", "w"].map(String::from).to_vec();
+        res.prop_map = vec![("r".into(), "value".into())];
+        let (text, notes) =
+            map("k", &[sc("rpoly", &["p", "n"], &["r", "w", "x"])], &[res]).unwrap();
+        assert_eq!(
+            text,
+            "map k:rpoly virtuoso a rpoly\n  pin p PLUS\n  pin n MINUS\n  param r value\n  param w w\n"
+        );
+        assert_eq!(
+            notes.text(),
+            "mapped\tk:rpoly\ta/rpoly: the only candidate; through its propMapping: r->value; not in its CDF: x\n"
         );
     }
 

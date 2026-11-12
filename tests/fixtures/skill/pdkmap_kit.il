@@ -3,7 +3,8 @@
 ;; - nfoo: model nfoo, spectre termOrder (D G S B), a 3-terminal symbol (D G S);
 ;; - nfoo_b: model nfoo, termOrder (D G S B), a 4-terminal symbol;
 ;; - pbar: model pbar, termOrder (D G S), where the scan has 4 pins;
-;; - rbaz: model rbaz, termOrder (PLUS MINUS);
+;; - rbaz: model rbaz, termOrder (PLUS MINUS), r netlisted from the CDF's value
+;;   (propMapping, as a commercial kit's resistors);
 ;; - nocdf: a symbol and no CDF.
 
 ;; A device cell: a symbol of pins (name dir x y), a base CDF with a model parameter
@@ -32,6 +33,12 @@
     t))
 
 (procedure (SfyFixRbaz lib)
-  (SfyFixMapDev lib "rbaz" "rbaz" (list "PLUS" "MINUS")
-    (list (list "PLUS" "inputOutput" 0 40) (list "MINUS" "inputOutput" 0 -40))
-    (list "r" "m")))
+  (let ((cdf nil))
+    (SfyFixMapDev lib "rbaz" "rbaz" (list "PLUS" "MINUS")
+      (list (list "PLUS" "inputOutput" 0 40) (list "MINUS" "inputOutput" 0 -40))
+      (list "value" "m"))
+    (setq cdf (cdfGetBaseCellCDF (ddGetObj lib "rbaz")))
+    (setSGq cdf (list nil 'spectre (list nil 'termOrder '(PLUS MINUS) 'otherParameters '(model)
+                                     'propMapping '(nil r value)))
+      simInfo)
+    (cdfSaveCDF cdf)))
