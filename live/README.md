@@ -176,8 +176,8 @@ mock. If the netlist checks fail with an si usage error, the log is in `out/netl
 
 ## Per-lane checks (`checks/`)
 
-A development harness beside the kit: one check per lane of Interop's parallel work (README
-"Development"), `checks/l1_mae_xml.il` to `checks/l9_cdfcb.il`, each a stub until its lane
+A development harness beside the kit: one check per lane of Interop's parallel work (CONTRIBUTING.md,
+"Parallel lanes"), `checks/l1_mae_xml.il` to `checks/l9_cdfcb.il`, each a stub until its lane
 writes it. `checks/run.sh <check>` runs one on the Virtuoso host under the shared run lock, in
 the lane's own scratch library `sfyprobe_<lane>`, created for the run and deleted after it;
 its header has the setup and the exit codes. A lane with a driver runs it from here with
