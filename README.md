@@ -131,18 +131,30 @@ no pin) loads the built-in copy, with no clone. `rev = "<commit>"` makes it a gi
 that commit of this repository instead; no release is tagged yet, so there is no
 `version = "<tag>"` to pin ([config.md](https://github.com/Scouren/Schemify-Plugins/blob/main/docs/spec/config.md)).
 
-For one project (so everyone who opens it gets the plugin): copy `interop.wasm` into the
-project and add it to the project manifest:
+Interop is not in the Schemify store index yet; `listing` in this repository is its store
+entry, and `schemify plugin check .` passes on it once CHANGELOG.md has a version heading.
+
+For one project (so everyone who opens it gets the plugin): name an init file in the project
+manifest's header and add the plugin there. A project manifest's own `plugin` records are not
+loaded.
 
 ```
-plugin interop path plugins/interop.wasm
-  grant read_project
-  grant write_project
-  grant read:ANALOG_ROOT
-  grant read:XSCHEM_LIBRARY
-  grant read:PDK_ROOT
-  fuel 100000000000
+schemify 1 project
+  init project.lua
 ```
+
+```lua
+-- project.lua
+schemify.pack.add {
+  { src = "https://github.com/Scouren/Interoperate", name = "interop",
+    grant = { "read_project", "write_project" }, fuel = 100000000000 },
+}
+```
+
+To pin your own build instead of the copy inside Schemify, copy `interop.wasm` and
+`schemify.project` from this repository into `plugins/interop/` and use
+`{ path = "plugins/interop", name = "interop", grant = { … }, fuel = 100000000000 }`. Each
+person who opens the project trusts it once before its plugins load.
 
 `fuel` is the per-event instruction budget ([plugin-abi §2](https://github.com/Scouren/Schemify-Plugins/blob/main/docs/spec/plugin-abi.md)). The default, 10^8, is too small for
 a conversion of a real design (a Virtuoso export of a small project with a PDK needed about
@@ -182,8 +194,7 @@ Release binaries are built when a version is tagged (`release.yml`); none is tag
 | `pdk-remote-models` | The same for a project's remote kit, written into its `set PDK_MODELS` |
 | `ciel` | Runs ciel: from `PATH`, else a private copy pinned to 3.2.0 |
 
-<details>
-<summary>The full synopsis (what <code>schemify-interop</code> prints when run without a command)</summary>
+The full synopsis (`schemify-interop` with no command prints the same usage):
 
 ```text
 schemify-interop virtuoso-export <project> <cell-file|dir>... -o <file.sfyx> [--lib L=V]... [--core-cells]
@@ -205,8 +216,6 @@ schemify-interop pdk-models      [--host <ssh name>] --root <dir> --entry <relpa
 schemify-interop pdk-remote-models <project> --host <[user@]host> [--family <f>] [--to <simulator>] [-o <host dir>]   (a remote kit's models for the project's simulator, below)
 schemify-interop ciel            <args>...      (ciel from PATH, else a private venv pinned to ciel 3.2.0 under Schemify's data directory, <data>/tools/ciel-3.2.0; needs python3; install output on stderr, ciel's exit status)
 ```
-
-</details>
 
 Paths after `<project>` are relative to it, and a directory stands for every cell file under
 it. Each conversion writes a report next to its output (`<name>.report.md`, `.report.txt`): everything that did not cross one to one, with a reason.
@@ -321,8 +330,7 @@ set. Only Virtuoso runs them, so Schemify never computes these values: it keeps 
 2. Each instance then carries Virtuoso's values (`cached`) from the import. Resize it in
    Schemify and they are stale: Run is blocked (`E039`) and an export leaves them to the
    callbacks (`SfyImport ?callbacks t`), whose values the next import brings back.
-3. To refresh them without sending the design: `schemify-interop virtuoso-refresh
-   <project> --scratch scratchLib -o refresh/` writes `refresh/refresh.il`; load it in
+3. To refresh them without sending the design: `schemify-interop virtuoso-refresh <project> --scratch scratchLib -o refresh/` writes `refresh/refresh.il`; load it in
    Virtuoso after `schemify.il` (it measures the stale instances' sizes on a scratch
    schematic and touches no design), then `schemify-interop virtuoso-refresh <project>
    --apply refresh/`.
@@ -364,8 +372,7 @@ the Schemify side; the report lists them.
 When the Schemify library and the Virtuoso library name the same devices differently (an
 xschem-imported sky130 against a Virtuoso sky130 kit), write `interop.map` at the project
 root. It maps cell, pins and parameters, including value scaling, and a bench's model file
-to the Spectre file Maestro reads (`model <file> virtuoso <spectre file>`, with `section
-<from> <to>` lines; any other model file that is not `.scs` is reported). Such instances are
+to the Spectre file Maestro reads (`model <file> virtuoso <spectre file>`, with `section <from> <to>` lines; any other model file that is not `.scs` is reported). Such instances are
 re-mastered: their connections ride on labels, so no net changes even though the two symbols
 differ in shape (spec §6.4, §8.2).
 
@@ -456,8 +463,7 @@ under a directory the plugin has the grant `read:<NAME>` for:
 
 Any other variable works the same once granted. A path outside the project and every granted
 root (an absolute path, `..`, or `${NAME}` without its grant) is refused by Schemify before
-anything is read, and the plugin logs `interop: <path>: refused: outside the project and every
-granted read:<NAME> root`. Outputs land in `<out-dir>/<lib>/<cell>.<ext>`, with
+anything is read, and the plugin logs `interop: <path>: refused: outside the project and every granted read:<NAME> root`. Outputs land in `<out-dir>/<lib>/<cell>.<ext>`, with
 `schemify.project` and `import-report.{md,txt}`.
 
 ## PDKs that stay on their host
@@ -485,10 +491,10 @@ that frames only the structural lines of the files it is given (`.model name typ
 `pdk-scan --stdin --root <dir> --entry <file> …`: same cells, plus a `need <path>` line per
 include to fetch next. The output format is in `src/pdk_scan.rs`.
 
-Spectre kits (`--dialect spectre`) are read with [SpiceRack](https://github.com/OpenFAT/SpiceRack):
+Spectre kits (`--dialect spectre`) are read with a full Spectre reader:
 every top-level `subckt` the entry reaches through `include` is a cell, names
 in their own case, and top-level compact models (BSIM, PSP, HiSIM, UTSOI) get `d g s b`.
-Lines SpiceRack does not read are counted, never shown. Includes inside a corner `section`
+Lines it does not read are counted, never shown. Includes inside a corner `section`
 are followed for the selected section.
 
 ### PDK map
@@ -512,10 +518,8 @@ The map passes `Mapping::parse` before it is written. It holds the kit's names, 
 out of public repositories, like a mirror.
 
 After a remote scan refresh, one command makes the dump on the kit host and maps it
-locally: `pdk-map --scan <cells> --host <ssh name> --vlib <vlib>... -o
-interop.map` runs `ssh <host> sh -s` (whatever the login shell) on a script that starts
-Virtuoso in batch there on `SfyCdfNames` and prints only the dump. `pdk-map
---remote-script --vlib <vlib>...` prints that script, for a caller that runs ssh itself and
+locally: `pdk-map --scan <cells> --host <ssh name> --vlib <vlib>... -o interop.map` runs `ssh <host> sh -s` (whatever the login shell) on a script that starts
+Virtuoso in batch there on `SfyCdfNames` and prints only the dump. `pdk-map --remote-script --vlib <vlib>...` prints that script, for a caller that runs ssh itself and
 passes the output to `--dump`. Nothing about the site is built in: the script takes these
 variables from the environment `pdk-map` runs in:
 
@@ -536,7 +540,7 @@ removed otherwise.
 
 `schemify-interop pdk-models --root <dir> --entry <relpath>... --from <d> --to <d> -o <outdir>`
 converts each model file a kit reaches into another dialect at the same relative path,
-reporting losses by SpiceRack diagnostic code (`diag <relpath> <code> <count>`, never the
+reporting losses by diagnostic code (`diag <relpath> <code> <count>`, never the
 cards). The root must contain every file the kit includes (sky130: `--root sky130A`). A
 `models <path>` line per entry names the converted file, absolute: what `set PDK_MODELS`
 takes.
@@ -624,8 +628,7 @@ Every conversion lists its losses in the report. The main ones are below; open g
   such as the `convergence` archive, is kept and reported.
 - **Maestro results.** The command refuses for now: it needs the design hash of Schemify's
   run, which Schemify's public interface does not offer yet. What it maps when it can:
-  Maestro results (`SfyAdeResults`, then `schemify-interop maestro-results <project> <dump>
-  <bench>`) become one imported Schemify run of the bench: each corner and design point is
+  Maestro results (`SfyAdeResults`, then `schemify-interop maestro-results <project> <dump> <bench>`) become one imported Schemify run of the bench: each corner and design point is
   a job with its waveforms, values and spec verdicts, read exactly from the history's
   `.rdb`; a Monte Carlo history's points are its samples. Only the first test maps.
   Reported, not mapped: the other tests, values reduced across corners or sweeps, Monte
@@ -675,7 +678,7 @@ No Cadence tool runs here, so:
   anything outside the subset: C-style calls, infix operators, scale-suffixed or zero-padded
   numbers.
 - **The mock Virtuoso.** It implements every Cadence function the scripts call, with each
-  function's arity and argument types checked. A lint fails on any call it does not know.
+  call's arity and argument types checked. A lint fails on any call it does not know.
 - **Both sides together** (`tests/virtuoso_e2e.rs`):
   - A Rust export loaded by the shipped SKILL, dumped by it, and imported by Rust is
     byte-identical.
@@ -694,6 +697,10 @@ nix develop                    # the pinned Rust 1.95.0, xschem, ngspice and was
 cargo test --features cli      # every native test
 ./build.sh                     # rebuilds interop.wasm (reproducible; commit it with the change)
 ```
+
+`SCHEMIFY_REQUIRE_XSCHEM=1 cargo test --features cli --test guest --test xschem_export` fails
+instead of skipping when xschem is missing (the dev shell has it). Changes are listed in
+[CHANGELOG.md](CHANGELOG.md).
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the code map, how the tests get their oracles, the
 optional `cadence-records` feature, CI, and the rules for parallel lanes.

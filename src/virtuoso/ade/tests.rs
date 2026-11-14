@@ -227,8 +227,8 @@ fn outputs_translate_both_ways() {
     assert_eq!(out_from_ade("IS(\"/VM/p\")").unwrap(), "i(VM)");
 }
 
-/// The Exercise 1/2 output forms, ADE text written by hand
-/// (independent of the code's tables).
+/// The Exercise 1/2 output forms, ADE text written by hand (independent of the code's
+/// tables).
 #[test]
 fn calculator_outputs_map_to_ade_functions() {
     let vars: Vec<String> = ["VDD", "W", "VDS"].map(String::from).to_vec();

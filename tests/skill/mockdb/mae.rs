@@ -1,9 +1,8 @@
 //! Mock maestro (`mae*`, `axl*`) functions for `sfy_ade.il` (spec `interop.md` §5.4, §9).
 //!
 //! Signatures (rows of `mockdb::SIGNATURES`, checked before a call reaches here) are each
-//! function's arity and keywords, as collected (MIT) by virtuoso-bridge-lite's
-//! function database. What no live run has settled is marked `GUESS(Gn)`
-//! (spec §13).
+//! function's arity and keywords, as virtuoso-bridge-lite's function database (MIT) lists
+//! them. What is not settled by a live run is marked `GUESS(Gn)` (spec §13).
 //!
 //! Model: a setup per maestro view (`saved`, written by `maeSaveSetup`); `maeOpenSetup`
 //! gives a session (`fnxSession<k>`) holding a working copy, dropped by `maeCloseSession`.
@@ -37,8 +36,8 @@ use interop::virtuoso::ade::mae_xml::{self, Node};
 use super::super::{V, print, read_all};
 use super::MockDb;
 
-/// The maestro rows of `mockdb::SIGNATURES` (arity and keywords, via
-/// virtuoso-bridge-lite's function database, MIT).
+/// The maestro rows of `mockdb::SIGNATURES` (arity and keywords, as virtuoso-bridge-lite's
+/// function database, MIT, lists them).
 pub const ROWS: &[(&str, &str)] = &[
     ("maeOpenSetup", "t t t ?application ?histName ?mode"),
     ("maeCloseSession", "?session ?forceClose"),

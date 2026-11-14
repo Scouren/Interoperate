@@ -462,7 +462,7 @@ fn rack_devices(
     if n > 0 {
         let by: Vec<String> = unread.iter().map(|(k, c)| format!("{c} {k}")).collect();
         issues.push(format!(
-            "{n} line(s) SpiceRack does not read (not shown): {}",
+            "{n} line(s) the Spectre reader does not read (not shown): {}",
             by.join(", ")
         ));
     }

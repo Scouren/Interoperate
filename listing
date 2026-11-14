@@ -1,0 +1,10 @@
+schemify-listing 1
+publisher scouren
+license MIT
+categories interop
+summary Moves designs between Schemify and Cadence Virtuoso or xschem, with a report of everything that does not cross one to one.
+grant read_project Reads the cells and benches it exports to Virtuoso or xschem
+grant write_project Writes the cells, benches and reports an import makes
+grant read:ANALOG_ROOT Reads xschem libraries under ANALOG_ROOT during an xschem import
+grant read:XSCHEM_LIBRARY Reads xschem symbol libraries under XSCHEM_LIBRARY during an xschem import
+grant read:PDK_ROOT Reads a PDK's xschem symbols and models under PDK_ROOT during an xschem import
