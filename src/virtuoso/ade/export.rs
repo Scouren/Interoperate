@@ -895,7 +895,7 @@ pub(super) enum SpiceLine {
 
 /// AC/noise sweep options of `dec|lin n f1 f2` (values SPICE numbers). ngspice's `lin n` is
 /// n points, Spectre's `lin=n` n steps (n+1 points, live): `lin n` is `lin=n-1` (`lin=0` the
-/// one point of start = stop; `lin=1` there is refused by Spectre, live).
+/// one point of start = stop; Spectre refuses `lin=1` there, live).
 fn freq_opts(ty: &str, n: &str, f1: &str, f2: &str) -> Option<Vec<(String, String)>> {
     let (f1, f2) = (ael::number_to_ael(f1)?, ael::number_to_ael(f2)?);
     let n = match ty.to_ascii_lowercase().as_str() {

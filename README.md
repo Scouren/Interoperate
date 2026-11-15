@@ -101,7 +101,7 @@ It writes `imported/<lib>/<cell>.<ext>`, a `schemify.project` and `import-report
 | `ciel` | `python3`, unless `ciel` is on `PATH` |
 
 xschem is not needed to convert, only by the tests that netlist with it. The live kit's
-netlist checks were made on Virtuoso ([live/README.md](live/README.md)); on
+netlist checks were made on one Virtuoso release ([live/README.md](live/README.md)); on
 another release, run the [first-time check](#first-time-with-virtuoso): every log names the
 functions the release lacks.
 

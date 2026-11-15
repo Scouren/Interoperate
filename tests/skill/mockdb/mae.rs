@@ -611,9 +611,7 @@ pub fn call(db: &mut MockDb, name: &str, args: &[V]) -> Option<Result<V, String>
             // Live Virtuoso: the getter's ?typeValue is a string (a list signals), unlike
             // the setters'.
             if key(&kw, "typeValue").is_some_and(|v| !matches!(v, V::Str(_))) {
-                return Some(Err(
-                    "*Error* maeGetVar: ?typeValue is not a string".into(),
-                ));
+                return Some(Err("*Error* maeGetVar: ?typeValue is not a string".into()));
             }
             let n = s0(0);
             let find =
@@ -1023,9 +1021,9 @@ pub fn call(db: &mut MockDb, name: &str, args: &[V]) -> Option<Result<V, String>
                     ])
                 })
             }
-            _ => Err(
-                "*Error* axlGetCornerDisabledTests: argument #1 is not a corner handle".into(),
-            ),
+            _ => {
+                Err("*Error* axlGetCornerDisabledTests: argument #1 is not a corner handle".into())
+            }
         },
         // No model groups are modelled: (0 nil), as live without any.
         "axlGetModelGroups" => Ok(V::list(vec![V::Int(0), V::Nil])),
@@ -1073,9 +1071,7 @@ pub fn call(db: &mut MockDb, name: &str, args: &[V]) -> Option<Result<V, String>
                         Ok(V::str(field))
                     }
                 }
-                _ => Err(format!(
-                    "*Error* {name}: argument #1 is not a model handle"
-                )),
+                _ => Err(format!("*Error* {name}: argument #1 is not a model handle")),
             }
         }
         "axlGetVars" => match m.resolve(&a[0]) {
@@ -1165,9 +1161,7 @@ pub fn call(db: &mut MockDb, name: &str, args: &[V]) -> Option<Result<V, String>
                         V::list(items)
                     }))
             }
-            _ => {
-                Err("*Error* axlGetSpecData: argument #1 is not a setup database handle".into())
-            }
+            _ => Err("*Error* axlGetSpecData: argument #1 is not a setup database handle".into()),
         },
         "maeGetCurrentRunMode" => {
             let Some(k) = m.session(&kw) else {
@@ -1498,8 +1492,7 @@ pub fn call_files(
                 Some(Handle::Sdb(k)) => k,
                 _ => {
                     return Some(Err(
-                        "*Error* axlExportSetup: argument #2 is not a setup database handle"
-                            .into(),
+                        "*Error* axlExportSetup: argument #2 is not a setup database handle".into(),
                     ));
                 }
             };

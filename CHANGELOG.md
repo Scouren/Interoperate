@@ -6,6 +6,15 @@ everything is under Unreleased, summarized by the date of the commits.
 
 ## [Unreleased]
 
+### 2026-11-15
+
+- Test fixtures copied from live Virtuoso sessions are hand-written now: the schematic gap
+  dumps, the 256-parameter cap cell, a results point and a Monte Carlo history.
+- The ADE analysis forms table (`src/virtuoso/ade/forms.tsv`) is hand-written and covers the
+  common analyses: a field it does not list is kept as set, and reported when it is not a
+  Spectre parameter.
+- Comments name no product release, tool error code or vendor manual.
+
 ### 2026-11-14
 
 - Store listing (`listing`) and this changelog.
