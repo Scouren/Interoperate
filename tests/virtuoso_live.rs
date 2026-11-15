@@ -2413,12 +2413,12 @@ fn live_step() {
     }
 }
 
-/// analogLib `port` (421 CDF params, live Virtuoso dump) imports with Schemify's 256
-/// params per cell, the rest reported, and Schemify's project opens it (a load past the
+/// A hand-written source cell with 300 CDF params (`port_300params.sfyx`) imports with
+/// Schemify's 256 params per cell, the rest reported, and Schemify's project opens it (a load past the
 /// table capacity panicked).
 #[test]
 fn a_cell_past_the_param_table_imports_and_loads() {
-    let text = read(&fixtures().join("virtuoso/analoglib_port.sfyx")).unwrap();
+    let text = read(&fixtures().join("virtuoso/port_300params.sfyx")).unwrap();
     let imp = interop::virtuoso::import(
         &text,
         &interop::design::Files::new(),

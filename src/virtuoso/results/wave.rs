@@ -341,10 +341,10 @@ mod tests {
         assert!(text.contains("No. Variables: 2\nNo. Points: 3"));
     }
 
-    /// A live point (a_res: dc op, noise, stb, pss, pac) parses; its operating point is a
+    /// A hand-written point of every kind (dc op, noise, stb, pss, pac) parses; its operating point is a
     /// plot of its own; what has no waveform is listed.
     #[test]
-    fn a_live_point_of_every_kind_parses() {
+    fn a_point_of_every_kind_parses() {
         let t = include_str!("../../../tests/fixtures/virtuoso/a_res_point.txt");
         let a = parse(t).unwrap();
         let op = a.iter().find(|x| x.name == "dcOp").expect("dcOp");

@@ -222,9 +222,8 @@ pub fn convert(dump: &Dump, rdb: &[u8]) -> Result<History, String> {
         .filter_map(|r| Some((id(&r[0]), results.get(&id(&r[1]))?.clone())))
         .collect();
 
-    // A Monte Carlo history holds the statistical parameters (live MonteCarlo.0:
-    // monteCarlo::param::seed …, type `statistical`); each point is then one sample, its
-    // iteration the testStatus row's eighth column (1, 2, 3).
+    // A Monte Carlo history holds the statistical parameters (type `statistical`); each
+    // point is then one sample, its iteration the testStatus row's eighth column.
     let mc = params.iter().any(|r| r[9].text() == "statistical");
     let mut jobs: BTreeMap<(Option<String>, i64), (i64, Job)> = BTreeMap::new();
     for r in t("testStatus")? {

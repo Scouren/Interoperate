@@ -661,9 +661,10 @@ fn live_a_res_operating_point_and_sidebands() {
     assert!(plots.get(k + 15).is_none_or(|p| p.names != plots[k].names));
 }
 
-/// A live 3-sample Monte Carlo history (`live/checks/a_probe2.il`, Virtuoso, MonteCarlo.0:
-/// one Spectre `montecarlo` run, three points of one design point): each point is its
-/// sample, so the run's job keys are distinct (inventory row 22: all were NO_SAMPLE).
+/// A hand-written 3-sample Monte Carlo history (`fixtures/live/a_mc/mc.sql`: statistical
+/// parameters, three points whose samples 1..3 are not their design points 4..6): each
+/// point is its sample, so the run's job keys are distinct (inventory row 22: all were
+/// NO_SAMPLE).
 #[cfg(feature = "cli")]
 #[test]
 fn a_monte_carlo_history_gives_each_sample_its_job() {
