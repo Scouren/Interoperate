@@ -1,10 +1,10 @@
 # Changelog
 
 All notable changes to interop are listed here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). No version has been tagged yet, so
-everything is under Unreleased, summarized by the date of the commits.
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Each version is tagged
+`v<version>`; within a version, changes are summarized by the date of the commits.
 
-## [Unreleased]
+## [0.1.0] - 2026-11-15
 
 ### 2026-11-15
 

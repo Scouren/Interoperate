@@ -128,11 +128,11 @@ write) under the directory environment variable `<NAME>` names, as `${NAME}/…`
 
 Interop ships inside Schemify, off until your config names it: that spec (the repository,
 no pin) loads the built-in copy, with no clone. `rev = "<commit>"` makes it a git package at
-that commit of this repository instead; no release is tagged yet, so there is no
-`version = "<tag>"` to pin ([config.md](https://github.com/Scouren/Schemify-Plugins/blob/main/docs/spec/config.md)).
+that commit of this repository instead, and `version = "v0.1.0"` at that release tag
+([config.md](https://github.com/Scouren/Schemify-Plugins/blob/main/docs/spec/config.md)).
 
 Interop is not in the Schemify store index yet; `listing` in this repository is its store
-entry, and `schemify plugin check .` passes on it once CHANGELOG.md has a version heading.
+entry, and `schemify plugin check .` passes on it.
 
 For one project (so everyone who opens it gets the plugin): name an init file in the project
 manifest's header and add the plugin there. A project manifest's own `plugin` records are not
@@ -173,7 +173,7 @@ cargo install --git https://github.com/Scouren/Interoperate --features cli
 nix run github:Scouren/Interoperate -- <command> ...      # without installing
 ```
 
-Release binaries are built when a version is tagged (`release.yml`); none is tagged yet.
+Release binaries are built for each version tag (`release.yml`, as a draft release).
 
 ## Commands
 
