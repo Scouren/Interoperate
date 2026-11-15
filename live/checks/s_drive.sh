@@ -7,8 +7,8 @@
 #
 #   SFY_HOST=<host> live/checks/s_drive.sh
 #
-# tests/virtuoso_gaps.rs grades the result: copy s_schematic.sfyx to
-# tests/fixtures/virtuoso/gaps.sfyx and the si netlists to tests/fixtures/virtuoso/gaps/si/.
+# Compare the fetched dump with what tests/virtuoso_gaps.rs expects by hand; the fixtures there
+# are hand-written, never a copy of a dump (no vendor data in the repository).
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$here/../.."

@@ -1,9 +1,9 @@
-//! Lane S of the second gap round (notes/interop-research/gaps2/inv_schematic.md): a live
-//! dump graded on the Schemify side. `fixtures/virtuoso/gaps.sfyx` is what
-//! `live/checks/s_schematic.il` dumped on Virtuoso (`s_drive.sh`), `gaps/si/` the si
-//! netlists of the same cells: the import must connect every pin as Virtuoso does (its own
-//! `tnet` table and si's netlists), write no empty instance parameter, and keep the view an
-//! instance is placed through.
+//! Lane S of the second gap round (notes/interop-research/gaps2/inv_schematic.md), graded on
+//! the Schemify side. `fixtures/virtuoso/gaps*.sfyx` are hand-written dumps of the cells
+//! `live/checks/s_schematic.il` and `s_more.il` build, with made-up stand-ins for the
+//! reference cells (only the pins, parameters and simInfo the tests read): the import must
+//! connect every pin as the dump's own `tnet` table says, write no empty instance
+//! parameter, and keep the view an instance is placed through.
 
 mod common;
 
@@ -29,18 +29,18 @@ fn import() -> (Files, String) {
         &Mapping::default(),
         &ImportOptions::default(),
     )
-    .expect("the live dump imports");
+    .expect("the dump imports");
     (imp.files.into_iter().collect(), imp.notes.text())
 }
 
 /// The `dialect` netlist's input of `cell` (a project path) against its snapshot
-/// (`common::frozen_input`), taken when the netlist agreed with si's (`gaps/si/`).
+/// (`common::frozen_input`).
 fn netlist(files: &Files, cell: &str, dialect: &str) {
     common::frozen_input(files, cell, dialect);
 }
 
 #[test]
-fn the_live_dump_connects_as_virtuoso_does() {
+fn the_dump_connects_as_virtuoso_does() {
     let (files, report) = import();
     let problems = interop::check_output(&files.clone().into_iter().collect::<Vec<_>>());
     assert!(problems.is_empty(), "{problems:#?}");
@@ -52,8 +52,8 @@ fn the_live_dump_connects_as_virtuoso_does() {
         report.contains("joins on a pin figure off its centre"),
         "{report}"
     );
-    // Their Spectre netlists connected as si's (`gaps/si/<cell>.spectre.net`), the supply
-    // symbol a global label (S11), not an instance.
+    // Their Spectre netlists' input, the supply symbol a global label (S11), not an
+    // instance.
     for cell in ["conn", "alt"] {
         netlist(&files, &format!("sfyprobe_s/{cell}.shbench"), "Spectre");
     }
@@ -131,9 +131,9 @@ fn an_instance_through_another_view_keeps_its_pins_and_view() {
 fn empty_cdf_values_write_no_parameter() {
     let (files, _) = import();
     let cell = "sfyprobe_s/e1.shbench";
-    // si writes `M0 (nD nG nS 0) nmos` and `R0 (nD nS) resistor r=1K`, auCdl `RR0 nD nS 1K
-    // $[RP]`: no `k=` for an empty CDF value (`m`, `region`, `isnoisy`). The netlists had
-    // none, and ngspice ran the resistor line (`RR0 nD nS 1000 m=` before, which it refuses).
+    // The netlists are `M0 (nD nG nS 0) nmos` and `R0 (nD nS) resistor r=1K` (Spectre),
+    // `RR0 nD nS 1K $[RP]` (CDL): no `k=` for an empty CDF value (`m`, `region`, `isnoisy`);
+    // ngspice refuses the `RR0 nD nS 1000 m=` an empty `m` once gave.
     for d in ["Spectre", "Cdl", "Ngspice", "Ngspice"] {
         netlist(&files, cell, d);
     }
@@ -141,7 +141,7 @@ fn empty_cdf_values_write_no_parameter() {
 
 #[test]
 fn cds_thru_is_a_short_in_every_dialect() {
-    // si: `T0 (x y) iprobe` (S12).
+    // A through element is an ammeter in Spectre (S12).
     let (files, _) = import();
     let cell = "sfyprobe_s/pc.shbench";
     // Spectre `T0 (x y) iprobe`, ngspice `VT0 x y 0`.
@@ -151,16 +151,20 @@ fn cds_thru_is_a_short_in_every_dialect() {
 
 #[test]
 fn port_order_without_term_order_is_virtuosos() {
-    // si writes `subckt ord a m z` and `X0 (na nm nz) ord`: terminals sorted by name, not
-    // in the symbol's creation order z a m (G8).
+    // Virtuoso writes `subckt ord a m z` and `X0 (na nm nz) ord`: terminals sorted by name,
+    // not in the symbol's creation order z a m (G8). The pins land in that order.
     let (files, _) = import();
-    // Ours had `subckt ord a m z` and `(na nm nz)` too.
-    let want = fixture("gaps/si/ordtop.spectre.net");
-    assert!(want.contains("subckt ord a m z"), "{want}");
+    let ord = String::from_utf8(files["sfyprobe_s/ord.shcomp"].clone()).unwrap();
+    let pins: Vec<&str> = ord
+        .lines()
+        .filter_map(|l| l.strip_prefix("pin "))
+        .filter_map(|l| l.split(' ').next())
+        .collect();
+    assert_eq!(pins, ["a", "m", "z"], "{ord}");
     netlist(&files, "sfyprobe_s/ordtop.shbench", "Spectre");
 }
 
-/// The live dump with `edits` applied (`(after, inserted)` line pairs), imported.
+/// The dump with `edits` applied (`(after, inserted)` line pairs), imported.
 fn import_edited(edits: &[(&str, &str)], existing: &Files, analoglib: bool) -> String {
     let mut text = fixture("gaps.sfyx");
     for (after, ins) in edits {
@@ -184,7 +188,7 @@ fn what_the_import_cannot_carry_is_a_report_row() {
     let r = import_edited(
         &[
             (
-                r#"("param" "model" "string" "" "Model name" "" ("parseAsCEL") () "")"#,
+                r#"("param" "model" "string" "" "Model" "" ("parseAsCEL") () "")"#,
                 r#"("param" "btn" "button" "" "Press" "" () () "")
 ("param" "nf2" "int" "iPar(\"m\")*2" "nf2" "" () () "")"#,
             ),
@@ -247,7 +251,7 @@ fn what_the_import_cannot_carry_is_a_report_row() {
     );
 }
 
-/// `fixtures/virtuoso/gaps_more.sfyx` (live `s_more`) imported into an empty project.
+/// `fixtures/virtuoso/gaps_more.sfyx` (the cells of `s_more`) imported into an empty project.
 fn import_more() -> (Files, String) {
     let imp = virtuoso::import(
         &fixture("gaps_more.sfyx"),
@@ -255,13 +259,13 @@ fn import_more() -> (Files, String) {
         &Mapping::default(),
         &ImportOptions::default(),
     )
-    .expect("the live dump imports");
+    .expect("the dump imports");
     (imp.files.into_iter().collect(), imp.notes.text())
 }
 
 #[test]
 fn views_libraries_pcells_constraints_and_unsaved_edits_are_report_rows() {
-    // S4 S10 S14 S19 S20, each a named row of the live dump.
+    // S4 S10 S14 S19 S20, each a named row of the dump.
     let (files, r) = import_more();
     let problems = interop::check_output(&files.into_iter().collect::<Vec<_>>());
     assert!(problems.is_empty(), "{problems:#?}");
@@ -283,7 +287,7 @@ fn views_libraries_pcells_constraints_and_unsaved_edits_are_report_rows() {
 #[test]
 fn cdf_attributes_travel_back_on_an_unchanged_cell_and_are_reported_on_an_edited_one() {
     // S7: doneProc, formInitProc, paramEvaluate, the display modes and w's display,
-    // editable and use (live s_more blk) ride in vcdfrec.
+    // editable and use (s_more's blk) ride in vcdfrec.
     let (files, _) = import_more();
     let blk = String::from_utf8(files["sfyprobe_s/blk.shcomp"].clone()).unwrap();
     assert!(
@@ -361,7 +365,7 @@ fn cds_param_counts_value_only_words() {
 
 #[test]
 fn a_two_group_nlp_label_and_a_radio_param_cross_both_ways() {
-    // Live s_nlp (fixtures/virtuoso/gaps_nlp.sfyx): G23, a label `[@w:w=%:w?][@l: l=%]`;
+    // s_nlp's cells (fixtures/virtuoso/gaps_nlp.sfyx): G23, a label `[@w:w=%:w?][@l: l=%]`;
     // S17, a radio param.
     let imp = virtuoso::import(
         &fixture("gaps_nlp.sfyx"),
