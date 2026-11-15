@@ -471,7 +471,7 @@ fn a_spectre_kit_reads_through_spicerack() {
 }
 
 /// The remote script on the Spectre kit through a real `sh`: only structure crosses (no card
-/// value), and `--stdin` on its frames, fetching includes round by round as PDK-Manager
+/// value), and `--stdin` on its frames, fetching includes round by round as Schemify's PDK store
 /// does, gives the same cells and version as the direct scan.
 #[test]
 #[cfg_attr(

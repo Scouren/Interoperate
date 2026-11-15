@@ -1,5 +1,5 @@
 //! `schemify-interop pdk-scan` (feature `cli`): a PDK's device interface as Schemify cells,
-//! for PDK-Manager's plugin-served library (its `docs/remote-pdks.md` §4.3, §4.5). It runs
+//! for the plugin-served library of Schemify's PDK store (core `schemify_cli::pdk`). It runs
 //! next to the kit (`ssh host schemify-interop pdk-scan …`) or locally on frames the kit
 //! host's [`REMOTE_SCRIPT`] printed (`--stdin`), and never prints card data: no defaults, bins
 //! or model parameter values.
@@ -11,7 +11,7 @@
 //! pdk-scan --stdin [--root <dir>] --entry <path> --dialect spice|hspice|spectre [--section <s>] [--lib <name>]
 //! ```
 //!
-//! Output, protocol 1 (PDK-Manager parses it; keep it exact), files sorted by path:
+//! Output, protocol 1 (Schemify's `schemify_cli::pdk` parses it; keep it exact), files sorted by path:
 //!
 //! ```text
 //! pdkscan 1

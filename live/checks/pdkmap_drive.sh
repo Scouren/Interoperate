@@ -10,7 +10,7 @@
 # own directory and schemify_pdkmap.il), runs `run.sh pdkmap_names` there (under the host's
 # run lock, the library kept), fetches out/pdkmap_names.sfyx and requires it to be the
 # mock's dump of the kit (tests/pdk_map.rs). Then dumps the kept library again as
-# PDK-Manager does, `pdk-map --remote-script` through `ssh <host> sh -s` (under the run
+# Schemify's PDK store does, `pdk-map --remote-script` through `ssh <host> sh -s` (under the run
 # lock; Cadence from SFY_CADENCE_ENV, default run.sh's SFYCHECK_ENV file; VIRTUOSO and the
 # licence variables passed through when set here), requires the same dump and `pdk-map` of
 # tests/fixtures/pdk_map/scan onto it to be the mock's map, and deletes the library.

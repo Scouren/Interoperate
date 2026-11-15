@@ -77,7 +77,7 @@ pub fn run(args: &[String]) -> u8 {
         Some((cmd, rest)) if cmd == "maestro-results" => maestro_results(rest),
         // Lane L8: layout through KLayout.
         Some((cmd, rest)) if cmd == "layout-export" || cmd == "layout-import" => layout(cmd, rest),
-        // PDK-Manager's kit installs: ciel from PATH, else a pinned private copy.
+        // The PDK store's kit installs: ciel from PATH, else a pinned private copy.
         Some((cmd, rest)) if cmd == "ciel" => ciel(rest),
         _ => {
             eprintln!("{JOB_USAGE}");

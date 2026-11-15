@@ -80,7 +80,7 @@ pub(super) fn job_command(cmd: &str, args: &[String]) -> Option<(PathBuf, crate:
             p => paths.push(p.replace('\\', "/")),
         }
     }
-    // A directory names every cell file under it (a whole library: PDK-Manager exports an
+    // A directory names every cell file under it (a whole library: the PDK store exports an
     // install whose cells it cannot list).
     if cmd.ends_with("-export") {
         let root = Path::new(project);

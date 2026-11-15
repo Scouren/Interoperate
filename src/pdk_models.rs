@@ -1,7 +1,7 @@
 //! `schemify-interop pdk-models` (feature `cli`): a local kit's model files converted from one
 //! simulator dialect to another through SpiceRack's transpiler (`import::kit` reads the kit,
 //! `render::render_kit` writes each file). The store is the kit's own source files and their
-//! read order; PDK-Manager writes the dialect a simulator wants from them on demand.
+//! read order; Schemify's PDK store writes the dialect a simulator wants from them on demand.
 //!
 //! ```text
 //! pdk-models [--host <ssh name>] --root <dir> --entry <relpath>... --from <d> --to <d> -o <outdir>

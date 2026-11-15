@@ -1,4 +1,4 @@
-//! `schemify-interop ciel <args>…`: ciel (the open_pdks version manager PDK-Manager
+//! `schemify-interop ciel <args>…`: ciel (the open_pdks version manager Schemify's PDK store
 //! installs kits with), run with `<args>` and its exit status passed back. A `ciel` on
 //! `PATH` wins; otherwise the first call creates a private virtual environment pinned to
 //! [`CIEL_VERSION`] under Schemify's data directory (`python3 -m venv`, then `pip install`)
@@ -78,7 +78,7 @@ fn locate(path: Option<&std::ffi::OsStr>, tools: Option<&Path>) -> Located {
 /// A virtual environment cannot move (its scripts name their own path), so it is built in
 /// place and counts as installed only once [`DONE`] is written, last: an interrupted
 /// install is rebuilt by the next call.
-// ponytail: two first calls at once both build into `venv`; add a lock file if PDK-Manager
+// ponytail: two first calls at once both build into `venv`; add a lock file if the PDK store
 // ever runs ciel steps in parallel.
 fn install(venv: &Path) -> Result<PathBuf, String> {
     let exe = if cfg!(windows) { "ciel.exe" } else { "ciel" };
