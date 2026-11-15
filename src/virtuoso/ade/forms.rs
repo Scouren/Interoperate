@@ -1,15 +1,14 @@
 //! ADE analysis forms ⇄ Spectre statements (spec `interop.md` §9.2): `forms.tsv` holds, per
-//! analysis kind, the form fields ADE answers untouched (Virtuoso's `.cdsenv`) and the
-//! parameters Spectre's statement takes (`spectre -h <kind>`, Spectre); [`to_spectre`]
-//! writes an analysis as the statement ADE's netlister makes of it (live netlists, gaps
-//! round 2: `live/checks/a_probe.il`), [`from_spectre`] reads one back as the fields that
-//! netlist so.
+//! analysis kind, the form fields ADE reports with a value when nothing set them and the
+//! parameters Spectre's statement takes; [`to_spectre`] writes an analysis as the statement
+//! ADE's netlister makes of it (observed on our own benches, `live/checks/a_probe.il`),
+//! [`from_spectre`] reads one back as the fields that netlist so.
 
 use std::sync::OnceLock;
 
 use super::*;
 
-/// The table: `forms.tsv`, generated on the Virtuoso host (`live/checks/a_forms.py`).
+/// The table: `forms.tsv`, hand-written; a field it lacks counts as set.
 const FORMS: &str = include_str!("forms.tsv");
 
 /// `(defaults (kind, field, value), params (kind, names))` of [`FORMS`].
@@ -45,8 +44,7 @@ pub(super) fn form_default(kind: &str, field: &str) -> Option<&'static str> {
 pub(super) const STEADY: [&str; 4] = ["pss", "hb", "qpss", "envlp"];
 
 /// Whether field `field` of analysis `kind` holds `v` as nothing set it: its form default,
-/// or that default as the one-element list Virtuoso answers for some fields (`("1")`,
-/// live: pac `outmodharmvec`, hb `lsspharms`).
+/// or that default as the one-element list ADE answers for some fields (`("1")`).
 pub(super) fn is_form_default(kind: &str, field: &str, v: &str) -> bool {
     let d = form_default(kind, field);
     d == Some(v)
@@ -326,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn the_table_holds_the_measured_defaults() {
+    fn the_table_holds_the_defaults() {
         assert_eq!(form_default("noise", "outType"), Some("probe"));
         assert_eq!(form_default("dc", "incrType"), Some("Automatic"));
         assert_eq!(form_default("tran", "finalTimeOp"), Some("t"));
